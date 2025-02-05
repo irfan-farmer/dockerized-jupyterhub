@@ -1,0 +1,30 @@
+
+defaultEntryPoints = ["https","http"]
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+    [entryPoints.http.redirect]
+    entryPoint = "https"
+
+  [entryPoints.https]
+  address = ":443"
+    [entryPoints.https.tls]
+      [[entryPoints.https.tls.certificates]]
+      certFile = "/etc/certs/diva.cert"
+      keyFile = "/etc/certs/diva.key" 
+
+[docker]
+domain = "mvre.diva.cloud.awi.de"
+watch = true
+
+# Enable the Traefik API and dashboard
+[api]
+  dashboard = true  # Enables the Traefik dashboard
+  insecure = true   # Enable insecure dashboard access for local testing (remove in production)
+
+[entryPoints.traefik]
+  address = ":8080"
+
+[log]
+  level = "DEBUG"

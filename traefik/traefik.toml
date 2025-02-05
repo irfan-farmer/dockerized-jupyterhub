@@ -1,0 +1,37 @@
+defaultEntryPoints = ["https", "http"]
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+    [entryPoints.http.redirect]
+    entryPoint = "https"
+
+  [entryPoints.https]
+  address = ":443"
+    [entryPoints.https.tls]
+      [[entryPoints.https.tls.certificates]]
+      certFile = "/etc/certs/diva.crt"   # Replace with your actual certificate path
+      keyFile = "/etc/certs/diva.key"     # Replace with your actual key path
+
+  [entryPoints.traefik]
+  address = ":8080"  # Entry point for the Traefik dashboard
+
+[docker]
+domain = "mvre.diva.cloud.awi.de"
+watch = true
+
+# Enable the Traefik API and dashboard
+[api]
+  dashboard = true   # Enables the Traefik dashboard
+  debug = true       # Optional, enables debug mode for troubleshooting
+
+# Traefik web interface
+[web]
+  address = ":8080"  # The web interface for the dashboard is exposed here
+
+# Optional: Add basic authentication to protect the dashboard
+# [entryPoints.traefik.auth.basic]
+# users = [
+#     "admin:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/",  # Example user "admin" with password "admin"
+# ]
+

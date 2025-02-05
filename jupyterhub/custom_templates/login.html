@@ -1,0 +1,124 @@
+{% extends "templates/login.html" %}
+
+{% block login %}
+
+<div class="login-page">
+    <div class="signin-box">
+        <h2>Welcome to DIVA</h2>
+        <p>DIVA is part of M-VRE services. This tool, short for Data-Interpolating Variational Analysis in n dimensions, conducts a variational analysis and gridding of observations located arbitrarily in n dimensions.</p>
+
+        <!-- Logo Section -->
+        <img src="https://thumbs2.imgbox.com/78/e9/AtC4zaI3_t.png" alt="Logo" class="custom-logo">
+
+        <!-- Sign-in button outside the sign-in box but centered below it -->
+        <div class="sign-in-button-wrapper">
+            {{ super() }} <!-- This renders the default JupyterHub login form and button -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block stylesheet %}
+{{ super() }}
+<style>
+
+/* General layout styling */
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full viewport height */
+    flex-direction: column; /* Stack items vertically */
+    padding-top: 10px; /* Adjust this value to reduce the gap from the top */
+}
+
+/* Styling for the entire service-login block */
+.service-login {
+    margin-top: 20px;
+}
+
+/* Sign-in box styling */
+.signin-box {
+    background-color: #ffffff;
+    padding: 10px;
+/*    border: 3px solid #008CBA; /* Ocean-blue border */
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 140, 186, 0.5); /* Glowing border effect */
+    text-align: center;
+    font-family: Bahnschrift, sans-serif; /* Custom font */
+    width: auto; /* Adjust width based on content */
+    display: inline-block; /* Shrink/grow with content */
+    max-width: 400px; /* Set a maximum width for the box */
+    max-height: 600px; /* Set a maximum width for the box */
+}
+
+/* Custom logo inside the sign-in box */
+.custom-logo {
+    width: 100%;          /* Full width of the parent container */
+    height: auto;         /* Adjust height proportionally */
+    margin-bottom: 20px;  /* Space between the image and the sign-in button */
+}
+
+/* Button wrapper for centering the button */
+.sign-in-button-wrapper {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-top: -10px; /* Adjust the margin to bring the button closer */
+}
+
+/* Styling the JupyterHub sign-in button */
+input[type="submit"], .btn-jupyter {  /* More specific selector to override Jupyter styles */
+    width: 100%; /* Set the width of the button (adjust as necessary) */
+/*    max-width: 300px; /* Limit the maximum width */
+/*    padding: 15px; */
+    background-color: #008CBA; /* Ocean blue background */
+    color: white; /* White text */
+    font-family: Bahnschrift, sans-serif; /* Custom font */
+    font-size: 18px; /* Font size */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* Hover effect for the button */
+input[type="submit"]:hover, .btn-jupyter:hover {
+    background-color: #005f7f; /* Darker blue on hover */
+}
+
+.service-login a.btn-jupyter:active {
+    background-color: #004d66; /* Even darker blue when clicked */
+}
+
+/* Remove orange color on focus */
+.service-login a.btn-jupyter:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 140, 186, 0.5); /* Glow effect on focus */
+}
+
+/* Optional: Adjust vertical alignment */
+#login-main .service-login {
+    margin: 0 auto;
+    text-align: center;
+    display: block;
+}
+
+/* Responsive styling */
+@media (max-width: 768px) {
+    .signin-box {
+        max-width: 100%;
+        padding: 10px;
+    }
+
+    .custom-logo {
+        max-width: 200px;  /* Adjust image width for smaller screens */
+        max-height: 200px; /* Adjust image height for smaller screens */
+    }
+
+    button.btn.btn-jupyter {
+        width: 100%; /* Make button full width on smaller screens */
+    }
+}
+</style>
+{% endblock %}

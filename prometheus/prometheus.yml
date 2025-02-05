@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds.
+
+scrape_configs:
+  - job_name: 'jupyterhub'
+    metrics_path: '/hub/metrics'  # JupyterHub metrics path
+    static_configs:
+      - targets: ['mvre.diva.cloud.awi.de:80']  # Use the service name
+    authorization:
+      credentials: 'd98fc5bc342d484e9aa5ff7951151e67'  # The token you generated
+
+
