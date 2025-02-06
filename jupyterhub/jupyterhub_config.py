@@ -1,42 +1,38 @@
-# JupyterHub configuration
-
-# If you update this file, do not forget to delete the `jupyterhub_data` volume before restarting the jupyterhub service: docker volume rm jupyterhub_jupyterhub_data
-# Or, If you changed the COMPOSE_PROJECT_NAME to <name>: do not forget to remove the docker volume rm <name>_jupyterhub_data
-
 import os
-import sys 
-import shutil
-import subprocess
-import stat
-import pwd
+import sys
 import logging
+
+c = get_config()
+
+# Logging configuration
 c.JupyterHub.log_level = logging.DEBUG
 c.JupyterHub.log_format = "[%(levelname)1.1s %(asctime)s.%(msecs).03d %(name)s] %(message)s"
-#c.JupyterHub.metrics_enabled = True
-c= get_config()
 
-# Setting template paths for customization
-#c.JupyterHub.template_paths = ['/jupyterhub-docker/jupyterhub/custom_templates']
-c.JupyterHub.template_paths=['/usr/local/share/jupyterhub/custom_templates']
+# Template paths for customization
+c.JupyterHub.template_paths = ['/usr/local/share/jupyterhub/custom_templates']
 c.JupyterHub.logo_file = '/usr/local/share/jupyterhub/custom_templates/logo.png'
 
 # Using Helmholtz AAI to authenticate users
 from oauthenticator.generic import GenericOAuthenticator
 c.JupyterHub.authenticator_class = GenericOAuthenticator
 c.GenericOAuthenticator.authorize_url = 'https://login.helmholtz.de/oauth2-as/oauth2-authz'
-c.GenericOAuthenticator.oauth_callback_url = 'https://mvre.diva.cloud.awi.de/hub/oauth_callback'
-c.GenericOAuthenticator.client_id = '4aecfd5492ba0879fbee0223dd9caefd'
-c.GenericOAuthenticator.client_secret = '248c26ac48f843deb8a947d739569d43'
+c.GenericOAuthenticator.oauth_callback_url = f'https://{os.environ.get("HOST")}/hub/oauth_callback'
+c.GenericOAuthenticator.client_id = os.environ.get('CLIENT_ID')
+c.GenericOAuthenticator.client_secret = os.environ.get('CLIENT_SECRET')
 c.GenericOAuthenticator.login_service = 'Helmholtz AAI'
 c.GenericOAuthenticator.userdata_url = 'https://login.helmholtz.de/oauth2/userinfo'
 c.GenericOAuthenticator.token_url = 'https://login.helmholtz.de/oauth2/token/'
-#c.GenericOAuthenticator.username_key = 'preferred_username'
 c.GenericOAuthenticator.username_key = 'email'
 c.GenericOAuthenticator.refresh_pre_spawn = True
 c.GenericOAuthenticator.userdata_token_method = "url"
 c.GenericOAuthenticator.scope = ['openid', 'profile', 'email']
-c.GenericOAuthenticator.custom_403_message='Login Failed'
-c.GenericOAuthenticator.admin_users = {'irfan.khan@awi.de','khan@dkrz.de'}
+c.GenericOAuthenticator.custom_403_message = 'Login Failed'
+
+# Read admin users from environment variable
+admin_users = os.environ.get('ADMIN_USERS', '').split(',')
+admin_users = {user.strip() for user in admin_users if user.strip()}  # Remove empty strings and whitespace
+# Set admin users
+c.GenericOAuthenticator.admin_users = admin_users
 c.GenericOAuthenticator.auth_refresh_age = 300
 
 # Using DockerSpawner to spawn single user servers
@@ -49,43 +45,38 @@ c.DockerSpawner.debug = True
 c.DockerSpawner.remove = True
 c.DockerSpawner.name_template = "mvre-{username}"
 
-# Directories mounted to JupyterLab 
+# Directories mounted to JupyterLab
 c.DockerSpawner.notebook_dir = '/home/jovyan'
 c.DockerSpawner.volumes = {
-#'jupyterhub-user-{username}': '/mnt/p_mvre_workspace/{username}',
-'/mnt/p_mvre_workspace/{username}': '/home/jovyan/work',
-'/mnt/mosaic_data': {'bind': '/home/jovyan/mosaic_data', 'mode': 'ro'},
-'/mnt/extra_files': {'bind': '/home/jovyan/extra_files', 'mode': 'ro'},
-'/mnt/mosaic_netCDF': {'bind': '/home/jovyan/mosaic_netCDF', 'mode': 'ro'},
-'/mnt/mosaic_notebooks': {'bind': '/home/jovyan/mosaic_notebooks', 'mode': 'ro'},
-'/mnt/DIVA_Guidelines.pdf': {'bind': '/home/jovyan/DIVA_Guidelines.pdf', 'mode': 'ro'},
+    '/mnt/p_mvre_workspace/{username}': '/home/jovyan/work',
+    '/mnt/mosaic_data': {'bind': '/home/jovyan/mosaic_data', 'mode': 'ro'},
+    '/mnt/extra_files': {'bind': '/home/jovyan/extra_files', 'mode': 'ro'},
+    '/mnt/mosaic_netCDF': {'bind': '/home/jovyan/mosaic_netCDF', 'mode': 'ro'},
+    '/mnt/mosaic_notebooks': {'bind': '/home/jovyan/mosaic_notebooks', 'mode': 'ro'},
+    '/mnt/DIVA_Guidelines.pdf': {'bind': '/home/jovyan/DIVA_Guidelines.pdf', 'mode': 'ro'},
 }
 
 # Images to spawn
 c.DockerSpawner.allowed_images = {
-   'DIVA': 'abarth/divand-jupyterhub:latest',
-   'minimal-notebook': 'jupyter/minimal-notebook:x86_64-ubuntu-22.04',
-   'dkrz-wps': 'dkrz_wps'
-    }
+    'DIVA': 'abarth/divand-jupyterhub:latest',
+    'minimal-notebook': 'jupyter/minimal-notebook:x86_64-ubuntu-22.04',
+    'dkrz-wps': 'dkrz_wps'
+}
 
-# Other stuff
-spawn_cmd = os.environ.get("DOCKER_SPAWN_CMD", "start-singleuser.sh")
-c.DockerSpawner.cmd = spawn_cmdspawn_cmd = os.environ.get("DOCKER_SPAWN_CMD", "start-singleuser.sh")
-c.DockerSpawner.cmd = spawn_cmd
+# Spawn command
+c.DockerSpawner.cmd = os.environ.get("DOCKER_SPAWN_CMD", "start-singleuser.sh")
+
+# Template variables
 c.JupyterHub.template_vars = {
-#        'announcement_login': 'Welcome to DIVA',
-        'announcement_spawn': 'Select drop down for options',
-        'announcement_home' : 'To ensure that your data and notebooks are properly saved, please make sure to store them inside the designated "work" folder. Any data created outside of this folder will not be saved.'
-        }
+    'announcement_spawn': 'Select drop down for options',
+    'announcement_home': 'To ensure that your data and notebooks are properly saved, please make sure to store them inside the designated "work" folder. Any data created outside of this folder will not be saved.'
+}
 
-# Define Environment 
+# Define environment
 c.DockerSpawner.environment = {
     'JUPYTERHUB_USER': '{username}',
     'DEBUG': 'True',  # This will print more info during container launch
 }
-
-
-
 
 # Define roles with the necessary permissions
 c.JupyterHub.load_roles = [
@@ -97,12 +88,12 @@ c.JupyterHub.load_roles = [
             "read:servers",
             "delete:servers",
         ],
-        "services": ["jupyterhub-idle-culler-service"],  # Link to idle culler service
+        "services": ["jupyterhub-idle-culler-service"],
     },
     {
         'name': 'prometheus-admin',
         'scopes': ['read:metrics'],
-        'services': ['prometheus-service'],  # Link the role to the Prometheus service
+        'services': ['prometheus-service'],
     },
 ]
 
@@ -118,7 +109,6 @@ c.JupyterHub.services = [
     },
     {
         "name": "prometheus-service",
-        "api_token": "d98fc5bc342d484e9aa5ff7951151e67",  # Use a generated API token 
+        "api_token": os.environ.get('API_TOKEN'),  # Use environment variable for API token
     },
 ]
-
