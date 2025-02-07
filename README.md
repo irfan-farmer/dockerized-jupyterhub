@@ -6,7 +6,6 @@ This project provides a Docker-based deployment of JupyterHub with a comprehensi
 
 ## 🏗 Architecture
 
-<img src="./architecture.png" alt="JupyterHub Architecture" width="800"/>
 
 ![JupyterHub Architecture](./architecture.png)
 
