@@ -5,31 +5,25 @@ global:
 scrape_configs:
   # JupyterHub metrics
   - job_name: 'jupyterhub'
-    metrics_path: '/hub/metrics'  # JupyterHub metrics path
+    metrics_path: '/hub/metrics'  # JupyterHub metrics endpoint
     static_configs:
-      - targets: ['jupyterhub:80']  # Use the service name (ensure DNS resolution works)
+      - targets: ['jupyterhub:80']  # Use the service name defined in docker-compose.yml
     authorization:
-      credentials: 'd98fc5bc342d484e9aa5ff7951151e67'  # API token for authentication
+      credentials: '${API_TOKEN}'  # Use the API_TOKEN environment variable
 
   # Traefik metrics
   - job_name: 'traefik'
     static_configs:
-      - targets: ['traefik:8080']  # Traefik metrics endpoint
-    metrics_path: '/metrics'  # Traefik metrics path
-
-  # Docker metrics (if using Docker)
-  - job_name: 'docker'
-    static_configs:
-      - targets: ['docker:9323']  # Docker metrics endpoint (ensure Docker is configured to expose metrics)
-    metrics_path: '/metrics'  # Docker metrics path
-
-  # Node exporter (system metrics)
-  - job_name: 'node_exporter'
-    static_configs:
-      - targets: ['node_exporter:9100']  # Node exporter metrics endpoint
-    metrics_path: '/metrics'  # Node exporter metrics path
+      - targets: ['reverse-proxy:8080']  # Use the service name defined in docker-compose.yml
+    metrics_path: '/metrics'  # Traefik metrics endpoint
 
   # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']  # Prometheus self-metrics
+
+  # Node Exporter (optional, for system metrics)
+  # Uncomment this section if you add Node Exporter to your docker-compose.yml
+  # - job_name: 'node_exporter'
+  #   static_configs:
+  #     - targets: ['node_exporter:9100']  # Node Exporter metrics endpoint
