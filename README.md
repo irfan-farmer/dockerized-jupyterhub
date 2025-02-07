@@ -96,7 +96,7 @@ c.DockerSpawner.volumes = {
 - **JupyterHub**: `https://your-domain.com`
 - **Traefik Dashboard**: `http://your-domain.com:8080`
 - **Prometheus**: `http://your-domain.com:9090`
-- **Grafana**: `http://your-domain.com:3000` (default: admin/admin)
+- **Grafana**: `http://your-domain.com:3000` 
 
 ## 📊 Monitoring and Visualization
 
