@@ -24,7 +24,7 @@ The diagram above illustrates the system architecture:
 - **Grafana Visualization**: Customizable dashboards for real-time insights
 - **Docker Compose**: Simplified service management
 - **Highly Customizable**: Support for custom Docker images and volume mounts
-- **Scalable Architecture**: Designed for medium to large-scale deployments
+- **Scalable Architecture**: Designed for medium-scale deployments
 
 ## 📋 Prerequisites
 
@@ -60,6 +60,12 @@ Edit the `.env` file with your specific configurations:
 ```bash
 docker-compose up -d
 ```
+### 3. Stopping all the Services
+
+```bash
+docker-compose down
+Note: If you make any changes to the code particularly to the Jupyterhub Dockerfile, make sure to use "docker-compose build" before starting the services again
+```
 
 ## 🔧 Customization
 
@@ -69,9 +75,8 @@ Modify `jupyterhub_config.py` to add custom images:
 
 ```python
 c.DockerSpawner.allowed_images = {
-    'DIVA': 'abarth/divand-jupyterhub:latest',
-    'minimal-notebook': 'jupyter/minimal-notebook:x86_64-ubuntu-22.04',
-    'custom-image': 'your-custom-image:latest'
+
+    'server_name': 'your-custom-image_name:version'
 }
 ```
 
@@ -81,8 +86,7 @@ Configure custom volume mounts in `jupyterhub_config.py`:
 
 ```python
 c.DockerSpawner.volumes = {
-    '/mnt/p_mvre_workspace/{username}': '/home/jovyan/work',
-    '/mnt/mosaic_data': {'bind': '/home/jovyan/mosaic_data', 'mode': 'ro'},
+    '/mnt/workspace/{username}': '/home/jovyan/work',
     '/mnt/custom-data': {'bind': '/home/jovyan/custom-data', 'mode': 'rw'}
 }
 ```
@@ -152,7 +156,16 @@ docker-compose logs <service-name>
 
 ## 📄 License
 
-MIT License - See `LICENSE` file for details.
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+
+The MIT License is a permissive license that allows you to:
+- Use the code commercially
+- Modify the code
+- Distribute the code
+- Use the code privately
+
+For the full license terms and conditions, please refer to the [LICENSE](./LICENSE) file in the repository.
+
 
 ## 🙏 Acknowledgments
 
