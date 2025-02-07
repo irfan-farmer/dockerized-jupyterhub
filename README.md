@@ -6,8 +6,7 @@ This project provides a Docker-based deployment of JupyterHub with a comprehensi
 
 ## 🏗 Architecture
 
-
-![JupyterHub Architecture](./architecture.png)
+<img src="./architecture.png" alt="JupyterHub Architecture" width="800" height="2027"/>
 
 The diagram above illustrates the system architecture:
 1. Users authenticate through Traefik reverse proxy
