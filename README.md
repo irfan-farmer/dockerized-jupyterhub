@@ -169,10 +169,10 @@ For the full license terms and conditions, please refer to the [LICENSE](./LICEN
 
 ## 🙏 Acknowledgments
 
-- JupyterHub
-- Traefik
-- Prometheus
-- Grafana
+- JupyterHub [https://jupyter.org/hub]
+- Traefik [https://traefik.io/]
+- Prometheus [https://prometheus.io/]
+- Grafana [https://grafana.com/]
 - M-VRE Team [https://mosaic-vre.org/team]
 
 ## About M-VRE Project
