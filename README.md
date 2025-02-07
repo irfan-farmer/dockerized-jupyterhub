@@ -173,7 +173,7 @@ For the full license terms and conditions, please refer to the [LICENSE](./LICEN
 - Traefik
 - Prometheus
 - Grafana
-- M-VRE Project
+- M-VRE Team [https://mosaic-vre.org/team]
 
 ## About M-VRE Project
 
