@@ -84,7 +84,7 @@ html, body {
 }
 
 .left-panel p {
-    font-size: 1.5rem; /* Increased from 1.3rem */
+    font-size: 1.5rem;
     line-height: 1.8;
     margin-bottom: 30px;
 }
@@ -117,13 +117,15 @@ html, body {
     flex-direction: column;
     align-items: center;
     width: 100%;
-    max-width: 350px;
+    max-width: 400px; /* Increased container width */
     padding: 0 20px;
+    gap: 5px; /* Reduced gap between logo and button */
 }
 
 .diva-logo {
-    max-width: 300px; /* Increased from 250px */
-    margin-bottom: 20px; /* Reduced gap to bring logo closer to the button */
+    max-width: 350px; /* Increased logo size */
+    width: 100%;
+    margin-bottom: 0; /* Removed extra margin; gap controls spacing */
     align-self: center;
 }
 
@@ -134,12 +136,12 @@ html, body {
 }
 
 input[type="submit"], .btn-jupyter {
-    width: 300px;
-    padding: 15px;
+    width: 100%; /* Takes full width of the container */
+    padding: 18px; /* Increased padding for a larger button */
     background-color: #007bff;
     border: none;
     color: white;
-    font-size: 1.3rem; /* Increased from 1.1rem */
+    font-size: 1.5rem; /* Increased button text size */
     border-radius: 5px;
     cursor: pointer;
     transition: background 0.3s ease;

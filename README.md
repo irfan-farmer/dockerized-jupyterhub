@@ -64,7 +64,7 @@ docker-compose up -d
 
 ```bash
 docker-compose down
-Note: If you make any changes to the code particularly to the Jupyterhub Dockerfile, make sure to use "docker-compose build" before starting the services again
+Note:If you modify the code, especially the JupyterHub Dockerfile, be sure to run "docker-compose build" before restarting the services to apply the changes correctly.
 ```
 
 ## 🔧 Customization
@@ -177,6 +177,5 @@ For the full license terms and conditions, please refer to the [LICENSE](./LICEN
 
 ## About M-VRE Project
 
-Developed for the MOSAiC-Virtual Research Environment (M-VRE), this solution provides researchers seamless access to MOSAiC data through Jupyter notebooks, including specialized data analysis services like DIVAnd.
-
+Developed for the MOSAiC-Virtual Research Environment (M-VRE), this solution provides researchers seamless access to MOSAiC data through Jupyter notebooks, including specialized data analysis services like DIVA [https://github.com/gher-uliege/DIVAnd.jl]
 
