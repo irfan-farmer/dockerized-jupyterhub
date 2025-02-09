@@ -6,9 +6,7 @@ This project provides a Docker-based deployment of JupyterHub with a comprehensi
 
 ## 🏗 Architecture
 
-The architecture consists of several key components working together to provide a secure and monitored environment:
-
-<img src="./architecture.png" alt="JupyterHub Architecture" width="900" style="max-width: 100%; height: auto;"/>
+![JupyterHub Architecture](./architecture.svg)
 
 
 The diagram above illustrates the system architecture:
