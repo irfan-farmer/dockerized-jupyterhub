@@ -2,17 +2,58 @@ defaultEntryPoints = ["https", "http"]
 
 [entryPoints]
   [entryPoints.http]
-  address = ":80"
+    address = ":80"
     [entryPoints.http.redirect]
-    entryPoint = "https"
+      entryPoint = "https"
 
   [entryPoints.https]
-  address = ":443"
+    address = ":443"
     [entryPoints.https.tls]
       [[entryPoints.https.tls.certificates]]
-      certFile = "/etc/certs/diva.crt"
-      keyFile = "/etc/certs/diva.key"
+        certFile = "/etc/certs/diva.crt"
+        keyFile = "/etc/certs/diva.key"
 
 [docker]
-domain = "mvre.diva.cloud.awi.de"
-watch = true
+  endpoint = "unix:///var/run/docker.sock"
+  domain = "mvre.diva.cloud.awi.de"
+  watch = true
+  exposedByDefault = false
+
+[api]
+  dashboard = true
+
+# Define backends
+[backends]
+  [backends.jupyterhub]
+    [backends.jupyterhub.servers]
+      [backends.jupyterhub.servers.server1]
+        url = "http://jupyterhub:8000"
+    [backends.jupyterhub.healthcheck]
+      path = "/"
+      interval = "5s"
+      timeout = "3s"
+
+  [backends.maintenance]
+    [backends.maintenance.servers]
+      [backends.maintenance.servers.server1]
+        url = "http://maintenance:80"
+
+# Define frontends
+[frontends]
+  [frontends.main]
+    backend = "jupyterhub"
+    passHostHeader = true
+    [frontends.main.routes]
+      [frontends.main.routes.host]
+        rule = "Host:${HOST}"
+    [frontends.main.errors]
+      status = ["502-504"]
+      backend = "maintenance"
+      query = "/maintenance.html"
+
+  [frontends.fallback]
+    backend = "maintenance"
+    priority = 1
+    [frontends.fallback.routes]
+      [frontends.fallback.routes.host]
+        rule = "Host:${HOST}"

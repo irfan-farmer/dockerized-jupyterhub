@@ -16,6 +16,7 @@
     </div>
     <div class="right-panel">
         <div class="login-wrapper">
+            <!-- The logo and button are now tightly grouped in one centered container -->
             <img src="static/diva-logo-large.png" alt="DIVA Logo" class="diva-logo">
             <div class="sign-in-button-wrapper">
                 {{ super() }}
@@ -48,6 +49,7 @@ html, body {
     width: 100vw;
 }
 
+/* Left Panel (Mission Statement) */
 .left-panel {
     flex: 1;
     background: linear-gradient(135deg, #003366, #004080);
@@ -84,7 +86,7 @@ html, body {
 }
 
 .left-panel p {
-    font-size: 1.5rem;
+    font-size: 1.5rem;  /* Increased font size for mission statement */
     line-height: 1.8;
     margin-bottom: 30px;
 }
@@ -104,6 +106,7 @@ html, body {
     opacity: 0.7;
 }
 
+/* Right Panel (Logo and Sign-in Button) */
 .right-panel {
     flex: 1;
     background: #f4f4f4;
@@ -116,32 +119,34 @@ html, body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;  /* Center contents vertically within the wrapper */
     width: 100%;
-    max-width: 400px; /* Increased container width */
-    padding: 0 20px;
-    gap: 5px; /* Reduced gap between logo and button */
+    max-width: 500px;
+    padding: 0;
+    gap: 10px;  /* Small gap between the logo and the button */
 }
 
 .diva-logo {
-    max-width: 350px; /* Increased logo size */
+    max-width: 350px;  /* Increased logo size for better prominence */
     width: 100%;
-    margin-bottom: 0; /* Removed extra margin; gap controls spacing */
-    align-self: center;
+    margin: 0;  /* Remove extra margin */
+    display: block;
 }
 
 .sign-in-button-wrapper {
     width: 100%;
     display: flex;
     justify-content: center;
+    /* No extra margin here so that the button sits directly below the logo */
 }
 
 input[type="submit"], .btn-jupyter {
-    width: 100%; /* Takes full width of the container */
-    padding: 18px; /* Increased padding for a larger button */
+    width: 100%;
+    padding: 18px;
     background-color: #007bff;
     border: none;
     color: white;
-    font-size: 1.5rem; /* Increased button text size */
+    font-size: 1.5rem;  /* Increased button text size */
     border-radius: 5px;
     cursor: pointer;
     transition: background 0.3s ease;
@@ -151,20 +156,44 @@ input[type="submit"]:hover, .btn-jupyter:hover {
     background-color: #0056b3;
 }
 
+/* Testing these new rules before the start of media */
+#login-main {
+    display: flex !important;
+    height: auto !important;
+    min-height: 1vh;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 1px 0;
+}
+
+.service-login {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 350px;
+    margin: 0 auto;
+}
+
+/* Keep your existing button styles but add this */
+.btn-jupyter {
+    margin-top: 10px !important;
+    width: 100%;
+    max-width: 350px !important;
+}
+
 @media (max-width: 768px) {
     .vre-login-container {
         flex-direction: column;
     }
-
     .left-panel, .right-panel {
         flex: 1;
         width: 100%;
     }
-
     .content-wrapper, .login-wrapper {
         text-align: center;
     }
-
     .partner-logos {
         justify-content: center;
         gap: 20px;
@@ -172,4 +201,5 @@ input[type="submit"]:hover, .btn-jupyter:hover {
 }
 </style>
 {% endblock %}
+
 

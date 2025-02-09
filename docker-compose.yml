@@ -1,37 +1,57 @@
 version: '3'
-
 services:
   jupyterhub:
-    build: ./jupyterhub  # Points to the jupyterhub directory where the Dockerfile is located
-    image: jupyterhub_img  # Name for the custom JupyterHub image
+    build: ./jupyterhub
+    image: jupyterhub_img
     container_name: jupyterhub
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket for spawning containers
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - DOCKER_NETWORK_NAME=${COMPOSE_PROJECT_NAME}_default  # Docker network configuration
+      - DOCKER_NETWORK_NAME=${COMPOSE_PROJECT_NAME}_default
       - HUB_IP=jupyterhub
-      - HOST=${HOST}  # Hostname for Traefik routing
-      - CLIENT_ID=${CLIENT_ID}  # OAuth client ID
-      - CLIENT_SECRET=${CLIENT_SECRET}  # OAuth client secret
-      - API_TOKEN=${API_TOKEN}  # API token for Prometheus service
+      - HOST=${HOST}
+      - CLIENT_ID=${CLIENT_ID}
+      - CLIENT_SECRET=${CLIENT_SECRET}
+      - API_TOKEN=${API_TOKEN}
     labels:
       - "traefik.enable=true"
+      - "traefik.backend=jupyterhub"
       - "traefik.frontend.rule=Host:${HOST}"
+      - "traefik.port=8000"
+      - "traefik.frontend.passHostHeader=true"
+      - "traefik.backend.healthcheck.path=/"
+      - "traefik.backend.healthcheck.interval=5s"
     restart: on-failure
 
   reverse-proxy:
     image: traefik:v1.7
     container_name: traefik
-    command: --docker  # Enables the web UI and tells Traefik to listen to Docker
+    command: --docker
+    environment:
+      - DOCKER_API_VERSION=1.24
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"  # Expose Traefik metrics endpoint
+      - "8080:8080"
     volumes:
       - ./reverse-proxy/traefik.toml:/etc/traefik/traefik.toml
-      - /etc/certs:/etc/certs  # SSL certificates
-      - /var/run/docker.sock:/var/run/docker.sock  # Traefik listens to Docker events
+      - /etc/certs:/etc/certs
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: on-failure
+
+  maintenance:
+    image: nginx:alpine
+    container_name: maintenance
+    volumes:
+      - ./maintenance:/usr/share/nginx/html:ro
+      - ./maintenance-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=maintenance"
+      - "traefik.frontend.rule=Host:${HOST}"
+      - "traefik.port=80"
+      - "traefik.frontend.priority=1"
+    restart: always
 
   prometheus:
     image: prom/prometheus
@@ -46,13 +66,13 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "3000:3000"  # Expose Grafana on port 3000
+      - "3000:3000"
     environment:
       - GF_LOG_LEVEL=debug
-      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini  # Path inside container
+      - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
     volumes:
-      - grafana_data:/var/lib/grafana  # Persist Grafana data
-      - ./grafana/grafana.ini:/etc/grafana/grafana.ini  # Map grafana.ini from host to container
+      - grafana_data:/var/lib/grafana
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini
     restart: always
 
 volumes:
