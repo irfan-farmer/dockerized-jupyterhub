@@ -6,7 +6,7 @@ This project provides a Docker-based deployment of JupyterHub with a comprehensi
 
 ## 🏗 Architecture
 
-![JupyterHub Architecture](./architecture.svg)
+<img src="./architecture.svg" alt="JupyterHub Architecture" width="900" style="max-width: 100%; height: auto;"/>
 
 
 The diagram above illustrates the system architecture:
