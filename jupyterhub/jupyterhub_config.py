@@ -29,9 +29,13 @@ c.GenericOAuthenticator.userdata_token_method = "url"
 c.GenericOAuthenticator.scope = ['openid', 'profile', 'email']
 c.GenericOAuthenticator.custom_403_message = 'Login Failed'
 
-# Read admin users from environment variable
-admin_users = os.environ.get('ADMIN_USERS', '').split(',')
-admin_users = {user.strip() for user in admin_users if user.strip()}  # Remove empty strings and whitespace
+# Load admin users from environment
+admin_users = os.getenv("ADMIN_USERS", "")  # Read as string
+admin_users = {user.strip() for user in admin_users.split(",") if user.strip()}  # Convert to set
+
+# Debugging logs (visible in Docker logs)
+print(f"DEBUG: Loaded admin users: {admin_users}")
+
 # Set admin users
 c.GenericOAuthenticator.admin_users = admin_users
 c.GenericOAuthenticator.auth_refresh_age = 300
@@ -67,7 +71,7 @@ c.DockerSpawner.allowed_images = {
 # Spawn command
 c.DockerSpawner.cmd = os.environ.get("DOCKER_SPAWN_CMD", "start-singleuser.sh")
 
-# Template variables
+# Template variables for useful announcements 
 c.JupyterHub.template_vars = {
     'announcement_spawn': 'Select drop down for options',
     'announcement_home': 'To ensure that your data and notebooks are properly saved, please make sure to store them inside the designated "work" folder. Any data created outside of this folder will not be saved.'
@@ -115,6 +119,6 @@ c.JupyterHub.services = [
     },
     {
         "name": "prometheus-service",
-        "api_token": os.environ.get('API_TOKEN'),  # Use environment variable for API token
+        "api_token": os.environ.get('API_TOKEN'),  
     },
 ]

@@ -1,26 +1,32 @@
 global:
-  scrape_interval: 15s  # Scrape metrics every 15 seconds
-  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
 
 scrape_configs:
-  # JupyterHub metrics
   - job_name: 'jupyterhub'
-    metrics_path: '/hub/metrics'  # JupyterHub metrics endpoint
+    metrics_path: '/hub/metrics'
+    scheme: https
+    basic_auth:
+      username: ${PROMETHEUS_USER}
+      password: ${PROMETHEUS_PASSWORD}
     static_configs:
-      - targets: ['jupyterhub:80']  # Use the service name defined in docker-compose.yml
-    authorization:
-      credentials: '${API_TOKEN}'  # Use the API_TOKEN environment variable
+      - targets: ['jupyterhub:8000']
+    tls_config:
+      insecure_skip_verify: true
 
-  # Traefik metrics
   - job_name: 'traefik'
+    metrics_path: '/metrics'
     static_configs:
-      - targets: ['reverse-proxy:8080']  # Use the service name defined in docker-compose.yml
-    metrics_path: '/metrics'  # Traefik metrics endpoint
+      - targets: ['reverse-proxy:8080']
 
-  # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['localhost:9090']  # Prometheus self-metrics
+      - targets: ['localhost:9090']
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
 
   # Node Exporter (optional, for system metrics)
   # Uncomment this section if you add Node Exporter to your docker-compose.yml

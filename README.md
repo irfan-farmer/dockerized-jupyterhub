@@ -10,11 +10,11 @@ This project provides a Docker-based deployment of JupyterHub with a comprehensi
 
 
 The diagram above illustrates the system architecture:
-1. Users authenticate through Traefik reverse proxy
-2. Traefik handles load balancing to the JupyterHub multi-user server
-3. JupyterHub spawns individual Jupyter server workspaces
-4. Prometheus collects metrics from all components
-5. Grafana provides visualization of the collected metrics
+
+1. Traefik handles load balancing to the JupyterHub multi-user server
+2. JupyterHub handles authentication and spawns individual notebook servers
+3. Prometheus collects metrics from all components
+4. Grafana provides visualization of the collected metrics
 
 ## 🌟 Features
 
@@ -50,21 +50,21 @@ cp .env.example .env
 ```
 
 Edit the `.env` file with your specific configurations:
-- `HOST`: Your domain
-- `CLIENT_ID`: OAuth client ID
-- `CLIENT_SECRET`: OAuth client secret
-- `API_TOKEN`: API access token
 
 ### 3. Launch Services
 
 ```bash
+# Build and start services
 docker-compose up -d
+
+# Verify running containers
+docker-compose ps
 ```
 ### 3. Stopping all the Services
 
 ```bash
 docker-compose down
-Note:If you modify the code, especially the JupyterHub Dockerfile, be sure to run "docker-compose build" before restarting the services to apply the changes correctly.
+Note: After modifying Dockerfiles, run docker-compose build before restarting.
 ```
 
 ## 🔧 Customization
@@ -82,13 +82,31 @@ c.DockerSpawner.allowed_images = {
 
 ### Volume Mounts
 
-Configure custom volume mounts in `jupyterhub_config.py`:
+For persistent storage, configure docker volumes in `jupyterhub_config.py`:
 
 ```python
 c.DockerSpawner.volumes = {
     '/mnt/workspace/{username}': '/home/jovyan/work',
     '/mnt/custom-data': {'bind': '/home/jovyan/custom-data', 'mode': 'rw'}
 }
+```
+
+### Custom Authentication Methods
+
+We're using Helmholtz AAI based authentication for 
+    
+    1. Federated identity management
+    2. Single sign-on across research networks
+    3. Centralized access control
+
+For other Supported Authentication Options, please have a look at [https://jupyterhub.readthedocs.io/en/latest/reference/authenticators.html]
+
+Configuration Example (OAuth). Please, change this section in jupyterhub_config.py based on the authenticator you decide to use
+
+```python
+c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
+c.GenericOAuthenticator.client_id = os.environ['CLIENT_ID']
+c.GenericOAuthenticator.client_secret = os.environ['CLIENT_SECRET']
 ```
 
 ## 🌐 Accessing Services
@@ -106,7 +124,7 @@ Tracks:
 - JupyterHub: User activity, server spawn times
 - Traefik: HTTP request metrics
 - Docker: Container resource usage
-- System metrics via Node Exporter
+- System metrics via Node Exporter (This is optional. It can be enabled via prometheus.yml. Just uncomment the section and add corresponding service inside docker_compose.yml)
 
 ### Grafana Dashboards
 
@@ -137,13 +155,22 @@ Pre-configured dashboards for:
 
 ### Common Issues
 
-- **Prometheus Targets Down**: Check service logs
+- **Authentication Failures**: Verify OAuth/AAI configuration, Check client credentials
+- **Prometheus Targets Down**: Check service logs, Review Traefik routing configurations and Adjust container resource limits
 - **Traefik Metrics Unavailable**: Verify metrics exposure
 - **JupyterHub Metrics Missing**: Confirm `/hub/metrics` configuration
 
-View service logs:
+Some useful diagnostic commands:
+
 ```bash
+# Check service health
+docker-compose ps
+
+# View detailed logs
 docker-compose logs <service-name>
+
+# Network diagnostics
+docker network inspect <network_service_name>
 ```
 
 ## 🤝 Contributing
