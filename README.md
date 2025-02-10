@@ -93,20 +93,18 @@ c.DockerSpawner.volumes = {
 
 ### Custom Authentication Methods
 
-We're using Helmholtz AAI based authentication for 
+We're using Helmholtz AAI based authentication for:
     
     1. Federated identity management
     2. Single sign-on across research networks
     3. Centralized access control
 
-For other Supported Authentication Options, please have a look at [https://jupyterhub.readthedocs.io/en/latest/reference/authenticators.html]
+For other authentication options, please take a look at: [https://jupyterhub.readthedocs.io/en/latest/reference/authenticators.html]
 
-Configuration Example (OAuth). Please, change this section in jupyterhub_config.py based on the authenticator you decide to use
+Configuration Example (OAuth). Please, change the authenticator section in `jupyterhub_config.py` based on the authenticator you decide to use:
 
 ```python
 c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
-c.GenericOAuthenticator.client_id = os.environ['CLIENT_ID']
-c.GenericOAuthenticator.client_secret = os.environ['CLIENT_SECRET']
 ```
 
 ## 🌐 Accessing Services
