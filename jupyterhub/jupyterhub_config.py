@@ -10,7 +10,7 @@ c.JupyterHub.log_format = "[%(levelname)1.1s %(asctime)s.%(msecs).03d %(name)s] 
 
 # Template paths for customization
 c.JupyterHub.template_paths = ['/usr/local/share/jupyterhub/custom_templates/']
-c.JupyterHub.extra_static_paths = ['/usr/local/share/jupyterhub/static/']
+#c.JupyterHub.extra_static_paths = ['/usr/local/share/jupyterhub/static/']
 c.JupyterHub.logo_file = '/usr/local/share/jupyterhub/static/logo.png'
 
 # Using Helmholtz AAI to authenticate users
@@ -64,8 +64,8 @@ c.DockerSpawner.volumes = {
 # Images to spawn
 c.DockerSpawner.allowed_images = {
     'DIVA': 'abarth/divand-jupyterhub:latest',
-    'minimal-notebook': 'jupyter/minimal-notebook:x86_64-ubuntu-22.04',
-    'dkrz-wps': 'dkrz_wps'
+    'Minimal-Notebook (Minimal Jupyter Notebook with essential Python Stack)': 'jupyter/minimal-notebook:x86_64-ubuntu-22.04',
+    'Test-Server (Caution: Experimental features)': 'dkrz_wps'
 }
 
 # Spawn command
@@ -83,10 +83,6 @@ c.DockerSpawner.environment = {
     'DEBUG': 'True',  # This will print more info during container launch
 }
 
-# Test cnfig for enabling jupyterhub metrics
-c.JupyterHub.metrics_enabled = True
-c.JupyterHub.metrics_port = 80
-c.JupyterHub.metrics_path = '/hub/metrics'
 
 # Define roles with the necessary permissions
 c.JupyterHub.load_roles = [

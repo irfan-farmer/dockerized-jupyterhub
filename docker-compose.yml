@@ -1,9 +1,13 @@
 version: '3'
+
 services:
   jupyterhub:
     build: ./jupyterhub
     image: jupyterhub_img
     container_name: jupyterhub
+    networks:
+      - default
+      - monitoring
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -15,18 +19,23 @@ services:
       - API_TOKEN=${API_TOKEN}
     labels:
       - "traefik.enable=true"
-      - "traefik.backend=jupyterhub"
       - "traefik.frontend.rule=Host:${HOST}"
       - "traefik.port=8000"
       - "traefik.frontend.passHostHeader=true"
       - "traefik.backend.healthcheck.path=/"
       - "traefik.backend.healthcheck.interval=5s"
+    expose:
+      - "8000"
+      - "9100"
     restart: on-failure
 
   reverse-proxy:
     image: traefik:v1.7
     container_name: traefik
-    command: --docker
+    networks:
+      - default
+      - monitoring
+    command: --docker --web --web.metrics.prometheus
     environment:
       - DOCKER_API_VERSION=1.24
     ports:
@@ -37,6 +46,11 @@ services:
       - ./reverse-proxy/traefik.toml:/etc/traefik/traefik.toml
       - /etc/certs:/etc/certs
       - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.enable=true"
+      - "traefik.frontend.rule=Host:traefik.${HOST}"
+      - "traefik.port=8080"
+      - "traefik.frontend.auth.basic=${TRAEFIK_DASHBOARD_AUTH}"
     restart: on-failure
 
   maintenance:
@@ -47,7 +61,6 @@ services:
       - ./maintenance-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     labels:
       - "traefik.enable=true"
-      - "traefik.backend=maintenance"
       - "traefik.frontend.rule=Host:${HOST}"
       - "traefik.port=80"
       - "traefik.frontend.priority=1"
@@ -59,33 +72,47 @@ services:
     networks:
       - monitoring
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     labels:
       - "traefik.enable=true"
-      - "traefik.backend=prometheus"
       - "traefik.frontend.rule=Host:prometheus.${HOST}"
       - "traefik.port=9090"
       - "traefik.frontend.auth.basic.users=${PROMETHEUS_AUTH}"
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1'
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    ports:
-      - "3000:3000"
+    networks:
+      - monitoring
     environment:
       - GF_LOG_LEVEL=debug
       - GF_PATHS_CONFIG=/etc/grafana/grafana.ini
+      - GRAFANA_CERT_FILE=${GRAFANA_CERT_FILE}
+      - GRAFANA_CERT_KEY=${GRAFANA_CERT_KEY}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana_data:/var/lib/grafana
+      - /etc/certs:/etc/certs
       - ./grafana/grafana.ini:/etc/grafana/grafana.ini
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=grafana"
+      - "traefik.frontend.rule=Host:grafana.${HOST}"
+      - "traefik.port=3000"
+      - "traefik.frontend.auth.basic.users=${GRAFANA_AUTH}"
+      - "traefik.http.routers.grafana.entrypoints=https"
+      - "traefik.http.routers.grafana.tls=true"
+    ports:
+      - "3000:3000"
     restart: always
 
 volumes:
   grafana_data: {}
+  prometheus_data: {}
+
+networks:
+  monitoring:
+    driver: bridge

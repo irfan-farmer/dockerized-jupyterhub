@@ -5,7 +5,7 @@ defaultEntryPoints = ["https", "http"]
     address = ":80"
     [entryPoints.http.redirect]
       entryPoint = "https"
-
+  
   [entryPoints.https]
     address = ":443"
     [entryPoints.https.tls]
@@ -19,41 +19,10 @@ defaultEntryPoints = ["https", "http"]
   watch = true
   exposedByDefault = false
 
-[api]
-  dashboard = true
+[web]
+  address = ":8080"
+  [web.metrics.prometheus]
 
-# Define backends
-[backends]
-  [backends.jupyterhub]
-    [backends.jupyterhub.servers]
-      [backends.jupyterhub.servers.server1]
-        url = "http://jupyterhub:8000"
-    [backends.jupyterhub.healthcheck]
-      path = "/"
-      interval = "5s"
-      timeout = "3s"
+[web.auth.basic]
+users = ["admin:$apr1$3Ww7mRW3$kR.TjJ.nholDKV2CSf6Qe1"]  # Match .env value
 
-  [backends.maintenance]
-    [backends.maintenance.servers]
-      [backends.maintenance.servers.server1]
-        url = "http://maintenance:80"
-
-# Define frontends
-[frontends]
-  [frontends.main]
-    backend = "jupyterhub"
-    passHostHeader = true
-    [frontends.main.routes]
-      [frontends.main.routes.host]
-        rule = "Host:${HOST}"
-    [frontends.main.errors]
-      status = ["502-504"]
-      backend = "maintenance"
-      query = "/maintenance.html"
-
-  [frontends.fallback]
-    backend = "maintenance"
-    priority = 1
-    [frontends.fallback.routes]
-      [frontends.fallback.routes.host]
-        rule = "Host:${HOST}"

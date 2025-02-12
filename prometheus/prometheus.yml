@@ -5,28 +5,20 @@ global:
 
 scrape_configs:
   - job_name: 'jupyterhub'
-    metrics_path: '/hub/metrics'
-    scheme: https
-    basic_auth:
-      username: ${PROMETHEUS_USER}
-      password: ${PROMETHEUS_PASSWORD}
     static_configs:
-      - targets: ['jupyterhub:8000']
+      - targets: ['jupyterhub:9100']  # Access via Docker network
     tls_config:
       insecure_skip_verify: true
 
   - job_name: 'traefik'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['reverse-proxy:8080']
+      - targets: ['reverse-proxy:8080']  # Traefik metrics endpoint
 
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'grafana'
-    static_configs:
-      - targets: ['grafana:3000']
 
   # Node Exporter (optional, for system metrics)
   # Uncomment this section if you add Node Exporter to your docker-compose.yml
