@@ -24,5 +24,5 @@ defaultEntryPoints = ["https", "http"]
   [web.metrics.prometheus]
 
 [web.auth.basic]
-users = ["admin:$apr1$3Ww7mRW3$kR.TjJ.nholDKV2CSf6Qe1"]  # Match .env value
+users = ["${TRAEFIK_DASHBOARD_AUTH}"]
 

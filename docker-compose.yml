@@ -38,6 +38,7 @@ services:
     command: --docker --web --web.metrics.prometheus
     environment:
       - DOCKER_API_VERSION=1.24
+      - TRAEFIK_DASHBOARD_AUTH=${TRAEFIK_DASHBOARD_AUTH}
     ports:
       - "80:80"
       - "443:443"
