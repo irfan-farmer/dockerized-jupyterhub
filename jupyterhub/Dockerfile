@@ -5,7 +5,7 @@ RUN mkdir -p /usr/local/share/jupyterhub/custom_templates
 
 # Copy configuration files
 COPY jupyterhub_config.py .
-COPY custom_templates/login.html /usr/local/share/jupyterhub/custom_templates/
+COPY custom_templates/login.html custom_templates/spawn_pending.html /usr/local/share/jupyterhub/custom_templates/
 
 # Copy image files
 COPY custom_templates/static /usr/local/share/jupyterhub/static/
