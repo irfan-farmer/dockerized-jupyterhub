@@ -1,206 +1,105 @@
-# JupyterHub Deployment with Docker, Traefik, Prometheus, and Grafana
+# Dockerized JupyterHub
 
-## Overview
+[![CI](https://github.com/irfan-farmer/dockerized-jupyterhub/actions/workflows/ci.yml/badge.svg)](https://github.com/irfan-farmer/dockerized-jupyterhub/actions/workflows/ci.yml)
 
-This project provides a Docker-based deployment of JupyterHub with a comprehensive ecosystem of supporting technologies. Developed as part of the M-VRE (MOSAiC Virtual Research Environment) project, it offers a scalable, customizable, and production-ready solution for deploying multi-user Jupyter notebook environments.
+A production-ready JupyterHub for a single Docker host, sized for teams, courses and research groups with tens to a few hundred users. Each user gets their own container and persistent storage, and logs in through your organization's identity provider. The whole stack is one `compose.yaml` plus one `.env` file.
 
-## 🏗 Architecture
+## What's included
 
-![JupyterHub Architecture](./architecture.svg)
+- **JupyterHub 6 with DockerSpawner**: one container and one persistent volume per user, with CPU, memory and process limits.
+- **Login through any OpenID Connect provider**, such as Keycloak, Microsoft Entra ID, Google or Authentik. Only the users or groups you list can log in.
+- **Traefik 3** with automatic Let's Encrypt certificates. All traffic is HTTPS.
+- **Prometheus and Grafana** with a ready-made dashboard for active users, server starts, traffic and host resources.
+- **A maintenance page** while the hub is starting or stopped.
+- **Pinned versions**, a smoke test in CI, and weekly dependency updates through Dependabot.
 
+## Is this the right fit?
 
-The diagram above illustrates the system architecture:
+| | Users | Runs on | Users isolated by |
+|---|---|---|---|
+| [The Littlest JupyterHub](https://tljh.jupyter.org) | up to about 100 | one server | Unix accounts |
+| **This project** | tens to a few hundred | one Docker host | containers |
+| [Zero to JupyterHub](https://z2jh.jupyter.org) | hundreds to thousands | Kubernetes | containers |
 
-1. Traefik handles load balancing to the JupyterHub multi-user server
-2. JupyterHub handles authentication and spawns individual notebook servers
-3. Prometheus collects metrics from all components
-4. Grafana provides visualization of the collected metrics
+Choose this project if you want container isolation and monitoring without running Kubernetes. Everything runs on one host, so that host's memory and CPU limit how many people can work at once, and there is no failover.
 
-## 🌟 Features
+To size the host, plan for `USER_MEM_LIMIT` × peak concurrent users, plus 2 GB for the stack. With the default 2 GB limit, a 64 GB host serves about 30 people at once.
 
-- **Multi-User JupyterHub**: Robust multi-user Jupyter notebook server
-- **Traefik Reverse Proxy**: Automatic SSL (Let's Encrypt) and load balancing
-- **Prometheus Monitoring**: Comprehensive metrics collection
-- **Grafana Visualization**: Customizable dashboards for real-time insights
-- **Docker Compose**: Simplified service management
-- **Highly Customizable**: Support for custom Docker images and volume mounts
-- **Scalable Architecture**: Designed for medium-scale deployments
+## Architecture
 
-## 📋 Prerequisites
-
-Before getting started, ensure you have:
-
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
-- [Git](https://git-scm.com/downloads)
-
-## 🚀 Quick Start
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+```mermaid
+flowchart LR
+    browser([Browser]) -- HTTPS --> traefik[Traefik]
+    traefik -- DOMAIN --> hub[JupyterHub]
+    traefik -. while the hub is down .-> maintenance[Maintenance page]
+    traefik -- grafana.DOMAIN --> grafana[Grafana]
+    hub <-- OpenID Connect --> idp[(Identity provider)]
+    hub -- starts and proxies --> users[User containers<br/>one per user, with a volume]
+    prometheus[Prometheus] -- scrapes --> hub
+    prometheus -- scrapes --> traefik
+    prometheus -- scrapes --> node[Node exporter]
+    grafana --> prometheus
 ```
 
-### 2. Configure Environment Variables
+Only Traefik publishes ports. Separate Docker networks keep user containers away from the proxy's internals and the monitoring stack.
+
+## Requirements
+
+- A Linux server with Docker Engine 25 or newer and the Docker Compose plugin 2.24 or newer.
+- DNS records for `DOMAIN` and `grafana.DOMAIN` that point to the server. Ports 80 and 443 must be reachable from the internet, because Let's Encrypt validates over port 80.
+- An OpenID Connect client registered with your identity provider, with the redirect URI `https://DOMAIN/hub/oauth_callback`.
+
+## Quick start
 
 ```bash
+git clone https://github.com/irfan-farmer/dockerized-jupyterhub.git
+cd dockerized-jupyterhub
 cp .env.example .env
+chmod 600 .env
 ```
 
-Edit the `.env` file with your specific configurations:
-
-### 3. Launch Services
+Fill in the required values in `.env`. Each one is explained in the file. Then start the stack:
 
 ```bash
-# Build and start services
-docker-compose up -d
-
-# Verify running containers
-docker-compose ps
+docker compose up -d --build
 ```
-### 3. Stopping all the Services
+
+Open `https://DOMAIN` and sign in with an account listed in `ADMIN_USERS`. Grafana is at `https://grafana.DOMAIN`: sign in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
+
+The first time someone starts a server, the notebook image (a few GB) is downloaded, which can take several minutes. To skip that wait, pull the image in advance:
 
 ```bash
-docker-compose down
-Note: After modifying Dockerfiles, run docker-compose build before restarting.
+docker pull quay.io/jupyter/scipy-notebook:2026-10-19
 ```
 
-## 🔧 Customization
+## Configuration
 
-### Custom Docker Images
+Routine settings live in `.env`, and [.env.example](.env.example) documents every variable. [docs/configuration.md](docs/configuration.md) covers identity providers, access control, notebook images, resource limits and shared data.
 
-Modify `jupyterhub_config.py` to add custom images:
+For changes beyond `.env`, use `jupyterhub/jupyterhub_config.local.py` and `compose.override.yaml`. Git ignores both files, so `git pull` never conflicts with your changes.
 
-```python
-c.DockerSpawner.allowed_images = {
+## Documentation
 
-    'server_name': 'your-custom-image_name:version'
-}
+- [Configuration](docs/configuration.md)
+- [Operations](docs/operations.md): updates, backups, user data, maintenance and troubleshooting
+- [Security and privacy](docs/security-and-privacy.md): how the stack is secured and what personal data it processes
+
+## Repository layout
+
+```text
+compose.yaml    all services
+.env.example    settings template
+jupyterhub/     hub image and jupyterhub_config.py
+traefik/        security headers
+maintenance/    page shown while the hub is down
+prometheus/     scrape configuration
+grafana/        settings, data source and dashboard
+tests/          smoke test, also run by CI
+docs/           configuration, operations, security and privacy
 ```
 
-### Volume Mounts
+## Contributing and license
 
-For persistent storage, configure docker volumes in `jupyterhub_config.py`:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to propose changes. Releases follow [Semantic Versioning](https://semver.org/) and are listed in [CHANGELOG.md](CHANGELOG.md). Report security issues as described in [SECURITY.md](SECURITY.md).
 
-```python
-c.DockerSpawner.volumes = {
-    '/mnt/workspace/{username}': '/home/jovyan/work',
-    '/mnt/custom-data': {'bind': '/home/jovyan/custom-data', 'mode': 'rw'}
-}
-```
-
-### Custom Authentication Methods
-
-We're using Helmholtz AAI based authentication for:
-    
-    1. Federated identity management
-    2. Single sign-on across research networks
-    3. Centralized access control
-
-For other authentication options, please take a look at: [https://jupyterhub.readthedocs.io/en/latest/reference/authenticators.html]
-
-Configuration Example (OAuth). Please, change the authenticator section in `jupyterhub_config.py` based on the authenticator you decide to use:
-
-```python
-c.JupyterHub.authenticator_class = 'oauthenticator.generic.GenericOAuthenticator'
-```
-
-## 🌐 Accessing Services
-
-- **JupyterHub**: `https://your-domain.com`
-- **Traefik Dashboard**: `http://your-domain.com:8080`
-- **Prometheus**: `http://your-domain.com:9090`
-- **Grafana**: `http://your-domain.com:3000` 
-
-## 📊 Monitoring and Visualization
-
-### Prometheus Metrics
-
-Tracks:
-- JupyterHub: User activity, server spawn times
-- Traefik: HTTP request metrics
-- Docker: Container resource usage
-- System metrics via Node Exporter (This is optional. It can be enabled via prometheus.yml. Just uncomment the section and add corresponding service inside docker_compose.yml)
-
-### Grafana Dashboards
-
-Pre-configured dashboards for:
-- JupyterHub metrics
-- Traefik performance
-- Docker and system resources
-
-## 🆚 Comparison with Alternatives
-
-### Zero to JupyterHub
-- Kubernetes-focused
-- Complex setup
-- Best for large-scale cloud deployments
-
-### The Littlest JupyterHub
-- Lightweight
-- Easy setup
-- Limited scalability
-
-### Our Solution
-- Balance of simplicity and scalability
-- Highly customizable
-- Integrated monitoring
-- Flexible deployment options
-
-## 🛠 Troubleshooting
-
-### Common Issues
-
-- **Authentication Failures**: Verify OAuth/AAI configuration, Check client credentials
-- **Prometheus Targets Down**: Check service logs, Review Traefik routing configurations and Adjust container resource limits
-- **Traefik Metrics Unavailable**: Verify metrics exposure
-- **JupyterHub Metrics Missing**: Confirm `/hub/metrics` configuration
-
-Some useful diagnostic commands:
-
-```bash
-# Check service health
-docker-compose ps
-
-# View detailed logs
-docker-compose logs <service-name>
-
-# Network diagnostics
-docker network inspect <network_service_name>
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit changes
-4. Push to the branch
-5. Open a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
-
-The MIT License is a permissive license that allows you to:
-- Use the code commercially
-- Modify the code
-- Distribute the code
-- Use the code privately
-
-For the full license terms and conditions, please refer to the [LICENSE](./LICENSE) file in the repository.
-
-
-## 🙏 Acknowledgments
-
-- JupyterHub [https://jupyter.org/hub]
-- Traefik [https://traefik.io/]
-- Prometheus [https://prometheus.io/]
-- Grafana [https://grafana.com/]
-- M-VRE Team [https://mosaic-vre.org/team]
-
-## About M-VRE Project
-
-Developed for the MOSAiC-Virtual Research Environment (M-VRE), this solution provides researchers seamless access to MOSAiC data through Jupyter notebooks, including specialized data analysis services like DIVA [https://github.com/gher-uliege/DIVAnd.jl]
-
+Released under the [MIT License](LICENSE). Originally built for the MOSAiC Virtual Research Environment (M-VRE).
