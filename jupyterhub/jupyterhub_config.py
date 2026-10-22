@@ -5,9 +5,13 @@ For anything else, create jupyterhub_config.local.py next to this file. It is
 loaded last and ignored by git, so this file can be updated without conflicts.
 """
 
+import logging
 import os
 import sys
+import threading
 from pathlib import Path
+
+import docker
 
 c = get_config()  # noqa: F821 - provided by JupyterHub
 
@@ -24,10 +28,32 @@ def required_env(name):
     return value
 
 
+def required_secret(name):
+    """Return a Compose secret (see compose.yaml), exiting if it is empty."""
+    value = Path("/run/secrets", name.lower()).read_text().strip()
+    if not value:
+        sys.exit(f"{name} is not set. Add it to .env (see .env.example).")
+    return value
+
+
 def env_set(name):
     """Return a comma-separated environment variable as a set."""
     return {item.strip() for item in env(name).split(",") if item.strip()}
 
+
+def pull_images(images):
+    """Download images, so the first server start doesn't wait for them."""
+    log = logging.getLogger("JupyterHub")
+    for image in images:
+        try:
+            docker.from_env().images.pull(image)
+            log.info("Notebook image %s is ready", image)
+        except docker.errors.DockerException as e:
+            log.warning("Could not pull notebook image %s: %s", image, e)
+
+
+domain = required_env("DOMAIN")
+c.JupyterHub.public_url = f"https://{domain}/"
 
 # Hub state (user database, cookie secret) lives on the hub_data volume.
 c.JupyterHub.db_url = "sqlite:////srv/jupyterhub/data/jupyterhub.sqlite"
@@ -36,9 +62,17 @@ c.JupyterHub.cookie_secret_file = "/srv/jupyterhub/data/jupyterhub_cookie_secret
 c.JupyterHub.upgrade_db = True
 # Keep user servers running while the hub restarts.
 c.JupyterHub.cleanup_servers = False
-# User containers reach the hub API by its Compose service name.
+# User containers and the proxy reach the hub through its .internal alias
+# (see compose.yaml).
 c.JupyterHub.hub_ip = "0.0.0.0"
-c.JupyterHub.hub_connect_ip = "jupyterhub"
+c.JupyterHub.hub_connect_ip = "hub.internal"
+
+# The proxy runs in its own container (see compose.yaml).
+c.ConfigurableHTTPProxy.should_start = False
+c.ConfigurableHTTPProxy.api_url = "http://proxy.internal:8001"
+c.ConfigurableHTTPProxy.auth_token = required_env("PROXY_AUTH_TOKEN")
+# Also re-adds proxy routes every minute, for example after the proxy restarts.
+c.JupyterHub.last_activity_interval = 60
 
 # Login through any OpenID Connect provider.
 c.JupyterHub.authenticator_class = "oauthenticator.generic.GenericOAuthenticator"
@@ -47,7 +81,7 @@ c.GenericOAuthenticator.client_secret = required_env("OAUTH_CLIENT_SECRET")
 c.GenericOAuthenticator.authorize_url = required_env("OAUTH_AUTHORIZE_URL")
 c.GenericOAuthenticator.token_url = required_env("OAUTH_TOKEN_URL")
 c.GenericOAuthenticator.userdata_url = required_env("OAUTH_USERDATA_URL")
-c.GenericOAuthenticator.oauth_callback_url = f"https://{required_env('DOMAIN')}/hub/oauth_callback"
+c.GenericOAuthenticator.oauth_callback_url = f"https://{domain}/hub/oauth_callback"
 c.GenericOAuthenticator.username_claim = env("OAUTH_USERNAME_CLAIM", "preferred_username")
 c.GenericOAuthenticator.scope = env("OAUTH_SCOPE", "openid profile email").split()
 c.GenericOAuthenticator.login_service = env("OAUTH_LOGIN_SERVICE", "SSO")
@@ -76,8 +110,10 @@ c.DockerSpawner.cpu_limit = float(env("USER_CPU_LIMIT", "1"))
 c.DockerSpawner.extra_host_config = {
     "security_opt": ["no-new-privileges:true"],
     "pids_limit": 1024,
+    # No swap on top of the memory limit.
+    "memswap_limit": c.DockerSpawner.mem_limit,
 }
-# The first start of a new image includes pulling it.
+# A server may still need to pull its image, for example right after an update.
 c.DockerSpawner.start_timeout = 300
 
 c.JupyterHub.load_roles = [
@@ -104,12 +140,19 @@ c.JupyterHub.services = [
         ],
     },
     {
-        # Prometheus reads /hub/metrics with this token (a Compose secret).
+        # Prometheus reads /hub/metrics with this token.
         "name": "prometheus",
-        "api_token": Path("/run/secrets/metrics_token").read_text().strip(),
+        "api_token": required_secret("METRICS_TOKEN"),
     },
 ]
 
 local_config = Path(__file__).with_name("jupyterhub_config.local.py")
 if local_config.exists():
     load_subconfig(str(local_config))  # noqa: F821 - provided by JupyterHub
+
+# Pull the notebook images in the background, including any offered through
+# allowed_images in jupyterhub_config.local.py.
+images = {c.DockerSpawner.image}
+if isinstance(c.DockerSpawner.get("allowed_images"), dict):
+    images.update(c.DockerSpawner.allowed_images.values())
+threading.Thread(target=pull_images, args=(images,), daemon=True).start()
