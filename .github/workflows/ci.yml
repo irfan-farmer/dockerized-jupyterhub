@@ -23,3 +23,15 @@ jobs:
 
       - name: Smoke test
         run: tests/smoke-test.sh
+
+      - name: Find the hub image
+        id: hub-image
+        run: echo "ref=$(docker compose --env-file tests/test.env config --images | grep dockerized-jupyterhub)" >> "$GITHUB_OUTPUT"
+
+      - name: Scan the hub image for critical vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.hub-image.outputs.ref }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
