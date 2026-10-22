@@ -1,0 +1,9 @@
+# Loaded by Traefik's file provider. Static settings are in compose.yaml.
+http:
+  middlewares:
+    # Added to every HTTPS route (--entrypoints.websecure.http.middlewares).
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        contentTypeNosniff: true
+        referrerPolicy: strict-origin-when-cross-origin

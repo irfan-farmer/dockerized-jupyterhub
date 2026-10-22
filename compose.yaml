@@ -1,0 +1,179 @@
+# JupyterHub on a single Docker host. Settings live in .env (see .env.example).
+name: jupyterhub
+
+x-defaults: &defaults
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+
+services:
+  traefik:
+    <<: *defaults
+    image: traefik:v3.7.16
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=jupyterhub-proxy
+      - --providers.file.filename=/etc/traefik/dynamic.yml
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls.certresolver=letsencrypt
+      - --entrypoints.websecure.http.middlewares=security-headers@file
+      - --entrypoints.metrics.address=:8082
+      - --metrics.prometheus.entrypoint=metrics
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in .env}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - proxy
+      - monitoring
+
+  jupyterhub:
+    <<: *defaults
+    build: ./jupyterhub
+    environment:
+      - DOMAIN
+      - OAUTH_CLIENT_ID
+      - OAUTH_CLIENT_SECRET
+      - OAUTH_AUTHORIZE_URL
+      - OAUTH_TOKEN_URL
+      - OAUTH_USERDATA_URL
+      - OAUTH_USERNAME_CLAIM
+      - OAUTH_SCOPE
+      - OAUTH_LOGIN_SERVICE
+      - OAUTH_GROUPS_CLAIM
+      - ADMIN_USERS
+      - ADMIN_GROUPS
+      - ALLOWED_USERS
+      - ALLOWED_GROUPS
+      - ALLOW_ALL_USERS
+      - NOTEBOOK_IMAGE
+      - USER_MEM_LIMIT
+      - USER_CPU_LIMIT
+      - IDLE_TIMEOUT
+      - SHARED_DATA_DIR
+    volumes:
+      # Required by DockerSpawner to start user containers.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./jupyterhub:/srv/jupyterhub/config:ro
+      - hub_data:/srv/jupyterhub/data
+    secrets:
+      - metrics_token
+    # Traefik routes to the hub only while it is healthy; otherwise the
+    # maintenance page answers.
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/hub/health', timeout=4)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+      start_interval: 2s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.jupyterhub.rule=Host(`${DOMAIN:?Set DOMAIN in .env}`)
+      - traefik.http.routers.jupyterhub.entrypoints=websecure
+      - traefik.http.services.jupyterhub.loadbalancer.server.port=8000
+    networks:
+      - proxy
+      - users
+      - monitoring
+
+  maintenance:
+    <<: *defaults
+    image: nginxinc/nginx-unprivileged:1.31.7-alpine
+    volumes:
+      - ./maintenance/index.html:/usr/share/nginx/html/index.html:ro
+      - ./maintenance/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.maintenance.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.maintenance.entrypoints=websecure
+      - traefik.http.routers.maintenance.priority=1
+      - traefik.http.services.maintenance.loadbalancer.server.port=8080
+    networks:
+      - proxy
+
+  prometheus:
+    <<: *defaults
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    secrets:
+      - metrics_token
+    networks:
+      - monitoring
+
+  node-exporter:
+    <<: *defaults
+    image: prom/node-exporter:v1.12.1
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro
+    networks:
+      - monitoring
+
+  grafana:
+    <<: *defaults
+    image: grafana/grafana:13.2.4
+    environment:
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}/
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?Set GRAFANA_SECRET_KEY in .env}
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)
+      - traefik.http.routers.grafana.entrypoints=websecure
+      - traefik.http.services.grafana.loadbalancer.server.port=3000
+    networks:
+      - proxy
+      - monitoring
+
+secrets:
+  # Lets Prometheus read the hub's /hub/metrics endpoint.
+  metrics_token:
+    environment: METRICS_TOKEN
+
+networks:
+  # Traefik and the services it publishes.
+  proxy:
+    name: jupyterhub-proxy
+  # The hub and user containers. Name referenced in jupyterhub_config.py.
+  users:
+    name: jupyterhub-users
+  # Metrics only; no internet access.
+  monitoring:
+    name: jupyterhub-monitoring
+    internal: true
+
+volumes:
+  hub_data:
+  letsencrypt:
+  prometheus_data:
+  grafana_data:
