@@ -1,120 +1,115 @@
+"""JupyterHub configuration.
+
+Settings that differ between deployments are read from .env (see .env.example).
+For anything else, create jupyterhub_config.local.py next to this file. It is
+loaded last and ignored by git, so this file can be updated without conflicts.
+"""
+
 import os
 import sys
-import logging
+from pathlib import Path
 
-c = get_config()
+c = get_config()  # noqa: F821 - provided by JupyterHub
 
-# Logging configuration
-c.JupyterHub.log_level = logging.DEBUG
-c.JupyterHub.log_format = "[%(levelname)1.1s %(asctime)s.%(msecs).03d %(name)s] %(message)s"
 
-# Template paths for customization
-c.JupyterHub.template_paths = ['/usr/local/share/jupyterhub/custom_templates/']
-#c.JupyterHub.extra_static_paths = ['/usr/local/share/jupyterhub/static/']
-c.JupyterHub.logo_file = '/usr/local/share/jupyterhub/static/logo.png'
+def env(name, default=""):
+    """Return an environment variable, or `default` if it is unset or empty."""
+    return os.environ.get(name) or default
 
-# Using Helmholtz AAI to authenticate users
-from oauthenticator.generic import GenericOAuthenticator
-c.JupyterHub.authenticator_class = GenericOAuthenticator
-c.GenericOAuthenticator.authorize_url = 'https://login.helmholtz.de/oauth2-as/oauth2-authz'
-c.GenericOAuthenticator.oauth_callback_url = f'https://{os.environ.get("HOST")}/hub/oauth_callback'
-c.GenericOAuthenticator.client_id = os.environ.get('CLIENT_ID')
-c.GenericOAuthenticator.client_secret = os.environ.get('CLIENT_SECRET')
-c.GenericOAuthenticator.login_service = 'Helmholtz AAI'
-c.GenericOAuthenticator.userdata_url = 'https://login.helmholtz.de/oauth2/userinfo'
-c.GenericOAuthenticator.token_url = 'https://login.helmholtz.de/oauth2/token/'
-c.GenericOAuthenticator.username_key = 'email'
-c.GenericOAuthenticator.refresh_pre_spawn = True
-c.GenericOAuthenticator.userdata_token_method = "url"
-c.GenericOAuthenticator.scope = ['openid', 'profile', 'email']
-c.GenericOAuthenticator.custom_403_message = 'Login Failed'
 
-# Load admin users from environment
-admin_users = os.getenv("ADMIN_USERS", "")  # Read as string
-admin_users = {user.strip() for user in admin_users.split(",") if user.strip()}  # Convert to set
+def required_env(name):
+    value = env(name)
+    if not value:
+        sys.exit(f"{name} is not set. Add it to .env (see .env.example).")
+    return value
 
-# Debugging logs (visible in Docker logs)
-print(f"DEBUG: Loaded admin users: {admin_users}")
 
-# Set admin users
-c.GenericOAuthenticator.admin_users = admin_users
-c.GenericOAuthenticator.auth_refresh_age = 300
+def env_set(name):
+    """Return a comma-separated environment variable as a set."""
+    return {item.strip() for item in env(name).split(",") if item.strip()}
 
-# Using DockerSpawner to spawn single user servers
-c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
-c.DockerSpawner.network_name = os.environ['DOCKER_NETWORK_NAME']
-c.JupyterHub.hub_ip = os.environ['HUB_IP']
-c.JupyterHub.cleanup_proxy = True
-c.JupyterHub.cleanup_servers = True
-c.DockerSpawner.debug = True
+
+# Hub state (user database, cookie secret) lives on the hub_data volume.
+c.JupyterHub.db_url = "sqlite:////srv/jupyterhub/data/jupyterhub.sqlite"
+c.JupyterHub.cookie_secret_file = "/srv/jupyterhub/data/jupyterhub_cookie_secret"
+# Apply database migrations after upgrades. SQLite is backed up first.
+c.JupyterHub.upgrade_db = True
+# Keep user servers running while the hub restarts.
+c.JupyterHub.cleanup_servers = False
+# User containers reach the hub API by its Compose service name.
+c.JupyterHub.hub_ip = "0.0.0.0"
+c.JupyterHub.hub_connect_ip = "jupyterhub"
+
+# Login through any OpenID Connect provider.
+c.JupyterHub.authenticator_class = "oauthenticator.generic.GenericOAuthenticator"
+c.GenericOAuthenticator.client_id = required_env("OAUTH_CLIENT_ID")
+c.GenericOAuthenticator.client_secret = required_env("OAUTH_CLIENT_SECRET")
+c.GenericOAuthenticator.authorize_url = required_env("OAUTH_AUTHORIZE_URL")
+c.GenericOAuthenticator.token_url = required_env("OAUTH_TOKEN_URL")
+c.GenericOAuthenticator.userdata_url = required_env("OAUTH_USERDATA_URL")
+c.GenericOAuthenticator.oauth_callback_url = f"https://{required_env('DOMAIN')}/hub/oauth_callback"
+c.GenericOAuthenticator.username_claim = env("OAUTH_USERNAME_CLAIM", "preferred_username")
+c.GenericOAuthenticator.scope = env("OAUTH_SCOPE", "openid profile email").split()
+c.GenericOAuthenticator.login_service = env("OAUTH_LOGIN_SERVICE", "SSO")
+
+# Who may log in. Admins always can; everyone else must be allowed explicitly.
+c.GenericOAuthenticator.admin_users = env_set("ADMIN_USERS")
+c.GenericOAuthenticator.allowed_users = env_set("ALLOWED_USERS")
+c.GenericOAuthenticator.allow_all = env("ALLOW_ALL_USERS").lower() == "true"
+if env("ALLOWED_GROUPS") or env("ADMIN_GROUPS"):
+    c.GenericOAuthenticator.manage_groups = True
+    c.GenericOAuthenticator.auth_state_groups_key = "oauth_user." + env("OAUTH_GROUPS_CLAIM", "groups")
+    c.GenericOAuthenticator.allowed_groups = env_set("ALLOWED_GROUPS")
+    c.GenericOAuthenticator.admin_groups = env_set("ADMIN_GROUPS")
+
+# One container per user, with a persistent volume mounted as ~/work.
+c.JupyterHub.spawner_class = "dockerspawner.DockerSpawner"
+c.DockerSpawner.image = env("NOTEBOOK_IMAGE", "quay.io/jupyter/scipy-notebook:2026-10-19")
+c.DockerSpawner.network_name = "jupyterhub-users"
 c.DockerSpawner.remove = True
-c.DockerSpawner.name_template = "mvre-{username}"
-
-# Directories mounted to JupyterLab
-c.DockerSpawner.notebook_dir = '/home/jovyan'
-c.DockerSpawner.volumes = {
-    '/mnt/p_mvre_workspace/{username}': '/home/jovyan/work',
-    '/mnt/mosaic_data': {'bind': '/home/jovyan/mosaic_data', 'mode': 'ro'},
-    '/mnt/extra_files': {'bind': '/home/jovyan/extra_files', 'mode': 'ro'},
-    '/mnt/mosaic_netCDF': {'bind': '/home/jovyan/mosaic_netCDF', 'mode': 'ro'},
-    '/mnt/mosaic_notebooks': {'bind': '/home/jovyan/mosaic_notebooks', 'mode': 'ro'},
-    '/mnt/DIVA_Guidelines.pdf': {'bind': '/home/jovyan/DIVA_Guidelines.pdf', 'mode': 'ro'},
+c.DockerSpawner.notebook_dir = "/home/jovyan/work"
+c.DockerSpawner.volumes = {"jupyterhub-user-{username}": "/home/jovyan/work"}
+if shared_data_dir := env("SHARED_DATA_DIR"):
+    c.DockerSpawner.volumes[shared_data_dir] = {"bind": "/home/jovyan/work/shared", "mode": "ro"}
+c.DockerSpawner.mem_limit = env("USER_MEM_LIMIT", "2G")
+c.DockerSpawner.cpu_limit = float(env("USER_CPU_LIMIT", "1"))
+c.DockerSpawner.extra_host_config = {
+    "security_opt": ["no-new-privileges:true"],
+    "pids_limit": 1024,
 }
+# The first start of a new image includes pulling it.
+c.DockerSpawner.start_timeout = 300
 
-# Images to spawn
-c.DockerSpawner.allowed_images = {
-    'DIVA': 'abarth/divand-jupyterhub:latest',
-    'Minimal-Notebook (Minimal Jupyter Notebook with essential Python Stack)': 'jupyter/minimal-notebook:x86_64-ubuntu-22.04',
-    'Test-Server (Caution: Experimental features)': 'dkrz_wps'
-}
-
-# Spawn command
-c.DockerSpawner.cmd = os.environ.get("DOCKER_SPAWN_CMD", "start-singleuser.sh")
-
-# Template variables for useful announcements 
-c.JupyterHub.template_vars = {
-    'announcement_spawn': 'Select drop down for options',
-    'announcement_home': 'To ensure that your data and notebooks are properly saved, please make sure to store them inside the designated "work" folder. Any data created outside of this folder will not be saved.'
-}
-
-# Define environment
-c.DockerSpawner.environment = {
-    'JUPYTERHUB_USER': '{username}',
-    'DEBUG': 'True',  # This will print more info during container launch
-}
-
-
-# Define roles with the necessary permissions
 c.JupyterHub.load_roles = [
     {
-        "name": "jupyterhub-idle-culler-role",
-        "scopes": [
-            "list:users",
-            "read:users:activity",
-            "read:servers",
-            "delete:servers",
-        ],
-        "services": ["jupyterhub-idle-culler-service"],
+        "name": "idle-culler",
+        "scopes": ["list:users", "read:users:activity", "read:servers", "delete:servers"],
+        "services": ["idle-culler"],
     },
     {
-        'name': 'prometheus-admin',
-        'scopes': ['read:metrics'],
-        'services': ['prometheus-service'],
+        "name": "prometheus",
+        "scopes": ["read:metrics"],
+        "services": ["prometheus"],
+    },
+]
+c.JupyterHub.services = [
+    {
+        # Stops servers without activity for IDLE_TIMEOUT seconds.
+        "name": "idle-culler",
+        "command": [
+            sys.executable,
+            "-m",
+            "jupyterhub_idle_culler",
+            f"--timeout={env('IDLE_TIMEOUT', '3600')}",
+        ],
+    },
+    {
+        # Prometheus reads /hub/metrics with this token (a Compose secret).
+        "name": "prometheus",
+        "api_token": Path("/run/secrets/metrics_token").read_text().strip(),
     },
 ]
 
-# Define the services
-c.JupyterHub.services = [
-    {
-        "name": "jupyterhub-idle-culler-service",
-        "command": [
-            sys.executable,
-            "-m", "jupyterhub_idle_culler",
-            "--timeout=604800",  # Timeout to one week
-        ],
-    },
-    {
-        "name": "prometheus-service",
-        "api_token": os.environ.get('API_TOKEN'),  
-    },
-]
+local_config = Path(__file__).with_name("jupyterhub_config.local.py")
+if local_config.exists():
+    load_subconfig(str(local_config))  # noqa: F821 - provided by JupyterHub

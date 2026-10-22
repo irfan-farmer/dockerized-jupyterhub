@@ -1,2 +1,4 @@
-# .gitignore
+# Local settings and secrets
 .env
+compose.override.yaml
+jupyterhub/jupyterhub_config.local.py
