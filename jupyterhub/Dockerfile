@@ -1,19 +1,7 @@
-FROM jupyterhub/jupyterhub:4.0.0
+FROM jupyterhub/jupyterhub:6.1.1
 
-# Create directories for custom templates and static files
-RUN mkdir -p /usr/local/share/jupyterhub/custom_templates
+COPY requirements.txt /tmp/requirements.txt
+RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Copy configuration files
-COPY jupyterhub_config.py .
-COPY custom_templates/login.html custom_templates/spawn_pending.html /usr/local/share/jupyterhub/custom_templates/
-
-# Copy image files
-COPY custom_templates/static /usr/local/share/jupyterhub/static/
-
-RUN python3 -m pip install --no-cache-dir \
-    jupyterhub-idle-culler \
-    dockerspawner \
-    oauthenticator==15.1.0 \
-    jupyter_telemetry 
-
-
+# The configuration is mounted from ./jupyterhub at runtime (see compose.yaml).
+CMD ["jupyterhub", "-f", "/srv/jupyterhub/config/jupyterhub_config.py"]
