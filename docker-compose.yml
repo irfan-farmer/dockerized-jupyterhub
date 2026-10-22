@@ -17,6 +17,7 @@ services:
       - CLIENT_ID=${CLIENT_ID}
       - CLIENT_SECRET=${CLIENT_SECRET}
       - API_TOKEN=${API_TOKEN}
+      - ADMIN_USERS=${ADMIN_USERS}
     labels:
       - "traefik.enable=true"
       - "traefik.frontend.rule=Host:${HOST}"
