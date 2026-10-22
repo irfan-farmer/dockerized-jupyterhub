@@ -12,7 +12,7 @@ Run all commands from the repository directory.
 | Restart the hub | `docker compose restart jupyterhub` |
 | Stop everything | `docker compose down` |
 
-Restarting the hub doesn't stop users' servers. Their running kernels keep their state, and their browsers reconnect once the hub is back. A restart takes 10–20 seconds. During that time users first see a short proxy error while the hub shuts down, then the maintenance page.
+Restarting the hub doesn't interrupt users who are working: their notebooks keep running and stay connected, because the proxy runs separately. For the 10–20 seconds a restart takes, hub pages such as login, the home page and the admin panel show the maintenance page.
 
 Docker keeps up to 50 MB of logs per service (5 files of 10 MB) and deletes older entries.
 
@@ -25,9 +25,11 @@ Docker keeps up to 50 MB of logs per service (5 files of 10 MB) and deletes olde
    ```bash
    git fetch --tags
    git checkout v1.2.3
-   docker compose pull --ignore-buildable
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d --remove-orphans
    ```
+
+The hub image is downloaded ready-made from GitHub's container registry. To build it yourself instead, add `--build` to the last command.
 
 The hub upgrades its database on start, after saving a copy of the old one next to it.
 
@@ -93,7 +95,7 @@ Volume names contain the username. Characters that Docker doesn't allow in names
 
 ## Maintenance mode
 
-Stop the hub to show the maintenance page, and start it again when you're done:
+Stop the hub to show the maintenance page on hub pages, and start it again when you're done. Users with an open notebook can keep working meanwhile:
 
 ```bash
 docker compose stop jupyterhub
@@ -104,7 +106,13 @@ The page text is in [maintenance/index.html](../maintenance/index.html).
 
 ## Monitoring
 
-The **JupyterHub** dashboard in Grafana shows running servers, active users, failed server starts, server start times, HTTPS traffic, and host CPU, memory and disk usage. Prometheus keeps 30 days of metrics.
+Grafana isn't published to the internet. To open it, create an SSH tunnel from your computer, then go to `http://localhost:3000` and sign in as `admin` with `GRAFANA_ADMIN_PASSWORD`:
+
+```bash
+ssh -L 3000:localhost:3000 you@your-server
+```
+
+The **JupyterHub** dashboard shows running servers, active users, failed server starts, server start times, HTTPS traffic, and host CPU, memory and disk usage. Prometheus keeps 30 days of metrics.
 
 Set up alerts in Grafana under **Alerting**. At a minimum, alert on disk usage above 90%: user volumes grow over time, and a full disk stops the hub.
 
@@ -115,5 +123,7 @@ Set up alerts in Grafana under **Alerting**. At a minimum, alert on disk usage a
 | The browser warns about the certificate | Let's Encrypt couldn't validate the domain. Check that DNS points to the host and port 80 is open, then look at `docker compose logs traefik`. |
 | The identity provider shows an error before login | The redirect URI doesn't match. It must be exactly `https://DOMAIN/hub/oauth_callback`. |
 | "403 Forbidden" after login | The user isn't allowed. `docker compose logs jupyterhub` shows the username the provider sent; compare it with `ALLOWED_USERS` and the other rules. |
-| A server start times out | The notebook image is still downloading. Pull it in advance with `docker pull`. |
-| The maintenance page doesn't go away | The hub is unhealthy. Check `docker compose ps` and `docker compose logs jupyterhub`. |
+| A server start times out | The notebook image is still downloading. `docker compose logs jupyterhub` shows when it's ready. |
+| The maintenance page doesn't go away | The hub or the proxy is unhealthy. Check `docker compose ps`, then `docker compose logs jupyterhub proxy`. |
+| Users' servers are unreachable after the proxy restarted | The hub re-adds their routes within a minute. |
+| Grafana doesn't open | It's only reachable through the SSH tunnel described in [Monitoring](#monitoring). |

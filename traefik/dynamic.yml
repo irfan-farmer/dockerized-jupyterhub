@@ -1,5 +1,42 @@
-# Loaded by Traefik's file provider. Static settings are in compose.yaml.
+# Routes and middleware, loaded by Traefik's file provider. Static settings
+# (entry points, certificates) are in compose.yaml.
 http:
+  routers:
+    # Hub pages. While the hub is down, the maintenance page answers instead.
+    hub:
+      rule: Host(`{{ env "DOMAIN" }}`) && (Path(`/`) || PathPrefix(`/hub`))
+      entryPoints: [websecure]
+      service: hub-or-maintenance
+    # Everything else, including users' servers. It goes straight to the
+    # proxy, so running notebooks keep working while the hub restarts.
+    user-servers:
+      rule: Host(`{{ env "DOMAIN" }}`)
+      entryPoints: [websecure]
+      service: proxy
+
+  services:
+    hub-or-maintenance:
+      failover:
+        service: hub
+        fallback: maintenance
+    # The proxy, health-checked through to the hub.
+    hub:
+      loadBalancer:
+        servers:
+          - url: http://proxy.internal:8000
+        healthCheck:
+          path: /hub/health
+          interval: 3s
+          timeout: 2s
+    proxy:
+      loadBalancer:
+        servers:
+          - url: http://proxy.internal:8000
+    maintenance:
+      loadBalancer:
+        servers:
+          - url: http://maintenance.internal:8080
+
   middlewares:
     # Added to every HTTPS route (--entrypoints.websecure.http.middlewares).
     security-headers:

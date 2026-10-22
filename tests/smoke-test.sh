@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Starts the whole stack with the placeholder settings in tests/test.env and
 # checks that every part answers. Removes its containers and volumes afterwards.
-# Needs ports 80 and 443. Do not run on a host that serves a real deployment.
+# Needs ports 80, 443 and 3000. Do not run on a host that serves a real deployment.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # Git Bash on Windows would otherwise rewrite container paths like /etc/...
@@ -26,10 +26,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Request https://<host><path> against this machine. -k because tests use
-# Traefik's default certificate instead of requesting one.
-https_status() { curl -sk -o /dev/null -w '%{http_code}' --resolve "$1:443:127.0.0.1" "https://$1$2"; }
-returns() { [ "$(https_status "$1" "$2")" = "$3" ]; }
+# returns <status> <curl arguments>: requests to $DOMAIN go to this machine,
+# and -k accepts Traefik's default certificate, as tests request none.
+returns() {
+  local expected=$1
+  shift
+  [ "$(curl -sk -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:127.0.0.1" "$@")" = "$expected" ]
+}
 
 # Responses are captured before grep: piping curl into `grep -q` fails under
 # pipefail when grep exits before curl has finished writing.
@@ -43,13 +46,6 @@ login_page_shows_provider() {
   local page
   page=$(curl -sk --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/hub/login")
   grep -q 'Sign in with SSO' <<<"$page"
-}
-
-dashboard_provisioned() {
-  local status
-  status=$(curl -sk -o /dev/null -w '%{http_code}' -u "admin:$GRAFANA_ADMIN_PASSWORD" \
-    --resolve "grafana.$DOMAIN:443:127.0.0.1" "https://grafana.$DOMAIN/api/dashboards/uid/jupyterhub")
-  [ "$status" = 200 ]
 }
 
 all_targets_up() {
@@ -76,15 +72,17 @@ check() {
 compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
 compose up --detach --build --wait
 
-check "hub answers through Traefik" returns "$DOMAIN" /hub/health 200
+check "hub answers through Traefik" returns 200 "https://$DOMAIN/hub/health"
 check "HTTP redirects to HTTPS" redirects_to_https
 check "login page offers the identity provider" login_page_shows_provider
-check "Grafana answers" returns "grafana.$DOMAIN" /api/health 200
-check "Grafana dashboard is provisioned" dashboard_provisioned
+check "Grafana answers on localhost" returns 200 http://127.0.0.1:3000/api/health
+check "Grafana dashboard is provisioned" returns 200 -u "admin:$GRAFANA_ADMIN_PASSWORD" \
+  http://127.0.0.1:3000/api/dashboards/uid/jupyterhub
 check "Prometheus scrapes all targets" all_targets_up
 
 compose stop jupyterhub
-check "maintenance page while the hub is stopped" returns "$DOMAIN" / 503
+check "maintenance page while the hub is stopped" returns 503 "https://$DOMAIN/"
+check "users' traffic still reaches the proxy" returns 200 "https://$DOMAIN/_chp_healthz"
 
 compose up --detach --wait jupyterhub
-check "hub is back after a restart" returns "$DOMAIN" /hub/health 200
+check "hub is back after a restart" returns 200 "https://$DOMAIN/hub/health"
