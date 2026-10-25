@@ -1,0 +1,34 @@
+# Test-only additions to compose.yaml, used by tests/smoke-test.sh.
+#
+# Containers that could reach the internet look up outside names through a
+# canary resolver instead of real DNS. It answers every name with an unroutable
+# address, so tests never contact a real server, and it logs each lookup, so the
+# smoke test fails if anything looks up a name outside Docker. Prometheus and
+# Node exporter need no canary: their network has no outside DNS at all.
+x-canary: &canary
+  dns: [198.51.100.53]
+  networks:
+    canary: {}
+
+services:
+  canary-dns:
+    image: coredns/coredns:1.15.0
+    command: ["-conf", "/Corefile"]
+    volumes:
+      - ./tests/canary.Corefile:/Corefile:ro
+    networks:
+      canary:
+        ipv4_address: 198.51.100.53
+
+  traefik: *canary
+  proxy: *canary
+  jupyterhub: *canary
+  maintenance: *canary
+  grafana: *canary
+
+networks:
+  # 198.51.100.0/24 is reserved for documentation, so it can't clash with a real network.
+  canary:
+    ipam:
+      config:
+        - subnet: 198.51.100.0/24
