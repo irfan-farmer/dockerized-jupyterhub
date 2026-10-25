@@ -23,7 +23,7 @@ http:
     hub:
       loadBalancer:
         servers:
-          - url: http://proxy.internal:8000
+          - url: http://proxy.invalid:8000
         healthCheck:
           path: /hub/health
           interval: 3s
@@ -31,11 +31,11 @@ http:
     proxy:
       loadBalancer:
         servers:
-          - url: http://proxy.internal:8000
+          - url: http://proxy.invalid:8000
     maintenance:
       loadBalancer:
         servers:
-          - url: http://maintenance.internal:8080
+          - url: http://maintenance.invalid:8080
 
   middlewares:
     # Added to every HTTPS route (--entrypoints.websecure.http.middlewares).

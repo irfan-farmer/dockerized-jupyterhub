@@ -62,14 +62,14 @@ c.JupyterHub.cookie_secret_file = "/srv/jupyterhub/data/jupyterhub_cookie_secret
 c.JupyterHub.upgrade_db = True
 # Keep user servers running while the hub restarts.
 c.JupyterHub.cleanup_servers = False
-# User containers and the proxy reach the hub through its .internal alias
+# User containers and the proxy reach the hub through its .invalid alias
 # (see compose.yaml).
 c.JupyterHub.hub_ip = "0.0.0.0"
-c.JupyterHub.hub_connect_ip = "hub.internal"
+c.JupyterHub.hub_connect_ip = "hub.invalid"
 
 # The proxy runs in its own container (see compose.yaml).
 c.ConfigurableHTTPProxy.should_start = False
-c.ConfigurableHTTPProxy.api_url = "http://proxy.internal:8001"
+c.ConfigurableHTTPProxy.api_url = "http://proxy.invalid:8001"
 c.ConfigurableHTTPProxy.auth_token = required_env("PROXY_AUTH_TOKEN")
 # Also re-adds proxy routes every minute, for example after the proxy restarts.
 c.JupyterHub.last_activity_interval = 60
@@ -112,6 +112,8 @@ c.DockerSpawner.extra_host_config = {
     "pids_limit": 1024,
     # No swap on top of the memory limit.
     "memswap_limit": c.DockerSpawner.mem_limit,
+    # Don't append the host's DNS search domains (see compose.yaml).
+    "dns_search": ["."],
 }
 # A server may still need to pull its image, for example right after an update.
 c.DockerSpawner.start_timeout = 300

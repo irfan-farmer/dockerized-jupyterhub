@@ -1,12 +1,14 @@
 # JupyterHub on a single Docker host. Settings live in .env (see .env.example).
 #
-# Services reach each other through aliases ending in .internal, a domain
-# reserved for private use. A plain service name can resolve to an outside host
-# through a DNS search domain while its container is down; these names can't.
+# Services reach each other only through aliases ending in .invalid, a domain
+# that no DNS server resolves (RFC 6761), and containers don't use the host's
+# DNS search domains. While a container is down, a request meant for it fails
+# instead of reaching an outside host that happens to share its name.
 name: jupyterhub
 
 x-defaults: &defaults
   restart: unless-stopped
+  dns_search: .
   security_opt:
     - no-new-privileges:true
   logging:
@@ -44,8 +46,9 @@ services:
       - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - letsencrypt:/letsencrypt
     networks:
-      - edge
-      - monitoring
+      edge:
+      monitoring:
+        aliases: [traefik.invalid]
 
   # Routes requests to the hub and to users' servers. It runs apart from the
   # hub, so users stay connected while the hub restarts.
@@ -53,8 +56,8 @@ services:
     <<: *defaults
     image: jupyterhub/configurable-http-proxy:5.3.0
     command:
-      - --default-target=http://hub.internal:8081
-      - --error-target=http://hub.internal:8081/hub/error
+      - --default-target=http://hub.invalid:8081
+      - --error-target=http://hub.invalid:8081/hub/error
       # Traefik already sets the X-Forwarded headers.
       - --no-x-forward
     environment:
@@ -68,9 +71,9 @@ services:
       start_interval: 2s
     networks:
       edge:
-        aliases: [proxy.internal]
+        aliases: [proxy.invalid]
       users:
-        aliases: [proxy.internal]
+        aliases: [proxy.invalid]
 
   jupyterhub:
     <<: *defaults
@@ -115,8 +118,9 @@ services:
       start_interval: 2s
     networks:
       users:
-        aliases: [hub.internal]
+        aliases: [hub.invalid]
       monitoring:
+        aliases: [hub.invalid]
 
   maintenance:
     <<: *defaults
@@ -126,7 +130,7 @@ services:
       - ./maintenance/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       edge:
-        aliases: [maintenance.internal]
+        aliases: [maintenance.invalid]
 
   prometheus:
     <<: *defaults
@@ -142,7 +146,7 @@ services:
       - metrics_token
     networks:
       monitoring:
-        aliases: [prometheus.internal]
+        aliases: [prometheus.invalid]
 
   node-exporter:
     <<: *defaults
@@ -153,7 +157,8 @@ services:
     volumes:
       - /:/host:ro
     networks:
-      - monitoring
+      monitoring:
+        aliases: [node-exporter.invalid]
 
   grafana:
     <<: *defaults
