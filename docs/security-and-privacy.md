@@ -16,7 +16,7 @@ This page explains how the stack is secured and what personal data it processes.
 
 **Docker socket.** Only the hub has access to Docker, which it needs to start user containers. That access is equivalent to root on the host, so keep the hub updated, don't add software to its image, and restrict who can log in to the host. Traefik reads its routes from `traefik/dynamic.yml` and has no Docker access, so a flaw in the internet-facing service doesn't reach Docker.
 
-**Internal names.** Services reach each other through names ending in `.internal`, a domain reserved for private use. While a container is down, its plain service name could resolve to a host on the internet through your DNS search domain. A `.internal` name can't, so requests carrying cookies or tokens never leave the server.
+**Internal names.** Services reach each other only through names ending in `.invalid`, a domain that no DNS server resolves (RFC 6761), and no container uses the host's DNS search domains. So while a container is down, requests meant for it, which can carry cookies or tokens, fail instead of reaching an outside host with the same name. The one case this can't cover is a DNS server that breaks the standard by answering `.invalid` names. The smoke test checks this on every change: containers use a fake resolver that logs every lookup, and the test fails if any name is looked up outside Docker.
 
 **Proxy.** The proxy's API, which the hub uses to add routes for users' servers, requires `PROXY_AUTH_TOKEN`. User containers can reach the proxy, so keep that token secret and random.
 
@@ -41,7 +41,7 @@ gh attestation verify oci://ghcr.io/irfan-farmer/dockerized-jupyterhub:<version>
 
 The organization that runs the hub is the controller of the personal data it processes. The stack helps by keeping that data minimal, local and easy to delete.
 
-**No tracking or third-party requests.** The hub's pages, the maintenance page and Grafana load no external fonts, scripts, analytics or avatars. Grafana's Gravatar, news feed, update checks and usage reporting are turned off, as is Traefik's anonymous usage reporting. Inside users' servers, JupyterLab asks each user before it fetches its news feed. Content that users add themselves, such as notebooks that embed web resources, is outside the stack's control.
+**No tracking or third-party requests.** The hub's pages, the maintenance page and Grafana load no external fonts, scripts, analytics or avatars. Grafana's Gravatar, news feed, update checks, usage reporting, plugin downloads and plugin catalog are turned off, as is Traefik's anonymous usage reporting. The smoke test confirms that the services look up no outside names. Inside users' servers, JupyterLab asks each user before it fetches its news feed. Content that users add themselves, such as notebooks that embed web resources, is outside the stack's control.
 
 **Cookies.** JupyterHub and Grafana set only the cookies needed for login and request security. They set no tracking cookies.
 

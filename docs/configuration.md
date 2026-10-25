@@ -4,6 +4,8 @@ Routine settings live in `.env`, and [.env.example](../.env.example) describes e
 
 After changing `.env`, apply the change with `docker compose up -d`. This restarts the hub, but users stay connected to their servers.
 
+Containers, including users' servers, don't use the host's DNS search domains. Write full hostnames wherever you refer to a server, such as `keycloak.example.org` rather than `keycloak`.
+
 ## Identity provider
 
 The hub works with any OpenID Connect provider. Create a confidential client that uses the authorization code flow, set its redirect URI to `https://<DOMAIN>/hub/oauth_callback`, and copy the client ID and secret into `.env`. Then add the provider's endpoints:

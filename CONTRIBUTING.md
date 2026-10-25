@@ -12,7 +12,11 @@ Bug reports, fixes and documentation improvements are welcome. Keep pull request
    tests/smoke-test.sh
    ```
 
+   The test never contacts real servers: containers look up outside names through a fake resolver.
+
 4. Open a pull request. CI runs the same test.
+
+When one service connects to another, use the other service's `.invalid` alias from `compose.yaml`, never its plain name. The smoke test fails if a name is looked up outside Docker.
 
 Write commit messages in the [Conventional Commits](https://www.conventionalcommits.org/) style, for example `fix: keep user servers running during hub restarts`.
 

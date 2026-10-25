@@ -44,9 +44,14 @@ Users' files, the hub database and Grafana's data are kept.
 
 - The public `grafana.<DOMAIN>` address.
 
+### Fixed
+
+- Grafana still contacted grafana.com to install and update plugins, despite the privacy settings. Plugin downloads, signing-key checks and the plugin catalog are now turned off.
+
 ### Security
 
-- Services reach each other through `.internal` aliases. Before, while a container was down, its plain name could resolve to an outside host through a DNS search domain, and requests with cookies or tokens could go there.
+- Services reach each other only through `.invalid` aliases, which no DNS server resolves, and containers no longer use the host's DNS search domains. Before, while a container was down, its plain name could resolve to an outside host through a DNS search domain, and requests with cookies or tokens could go there. In 1.0.0 this affected user containers' requests to the hub.
+- The smoke test runs every container behind a canary resolver. Tests can't contact real servers, and they fail if any name is looked up outside Docker.
 
 ## [1.0.0] - 2026-10-22
 

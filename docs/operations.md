@@ -125,5 +125,5 @@ Set up alerts in Grafana under **Alerting**. At a minimum, alert on disk usage a
 | "403 Forbidden" after login | The user isn't allowed. `docker compose logs jupyterhub` shows the username the provider sent; compare it with `ALLOWED_USERS` and the other rules. |
 | A server start times out | The notebook image is still downloading. `docker compose logs jupyterhub` shows when it's ready. |
 | The maintenance page doesn't go away | The hub or the proxy is unhealthy. Check `docker compose ps`, then `docker compose logs jupyterhub proxy`. |
-| Users' servers are unreachable after the proxy restarted | The hub re-adds their routes within a minute. |
+| Users' servers are unreachable after the proxy restarted | The hub re-adds their routes within about a minute. |
 | Grafana doesn't open | It's only reachable through the SSH tunnel described in [Monitoring](#monitoring). |
