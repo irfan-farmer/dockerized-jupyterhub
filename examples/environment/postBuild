@@ -1,0 +1,7 @@
+#!/bin/bash
+# Runs at the end of the image build, as the notebook user.
+set -euo pipefail
+
+# The hub mounts each user's persistent volume at ~/work. Creating the folder
+# here makes new volumes belong to the user instead of root.
+mkdir -p ~/work

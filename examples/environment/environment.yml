@@ -1,0 +1,13 @@
+# The software in this environment. Add what your course or project needs.
+# Keep jupyterhub-singleuser: it connects each server to the hub, and its
+# major version must match the hub's (6). It needs Python 3.11 or newer;
+# without a pin, repo2docker would use Python 3.10.
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - jupyterhub-singleuser=6.*
+  - jupyterlab=4.*
+  - numpy
+  - pandas
+  - matplotlib
