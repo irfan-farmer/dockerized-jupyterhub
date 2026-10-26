@@ -15,12 +15,17 @@ api() { curl -sk --resolve "$DOMAIN:443:127.0.0.1" -H "Authorization: token test
 
 # start_server <allowed_images key>: start the test user's server and wait for it.
 start_server() {
-  api -o /dev/null -X POST -d "{\"image\": \"$1\"}" "https://$DOMAIN/hub/api/users/$TEST_USER/server"
+  local response
+  response=$(api -w ' HTTP %{http_code}' -X POST -d "{\"image\": \"$1\"}" "https://$DOMAIN/hub/api/users/$TEST_USER/server")
+  case $response in
+    *"HTTP 201" | *"HTTP 202") ;;
+    *) echo "FAIL starting the $1 server: $response" >&2; return 1 ;;
+  esac
   check "$1 server answers" returns 200 -H "Authorization: token test-api-token" "$SERVER/api/status"
 }
 
 stop_server() {
-  api -o /dev/null -X DELETE "https://$DOMAIN/hub/api/users/$TEST_USER/server"
+  api -X DELETE "https://$DOMAIN/hub/api/users/$TEST_USER/server" >/dev/null
   check "$1 server stops" container_gone
 }
 
@@ -28,7 +33,9 @@ container_gone() { ! docker inspect "jupyter-$TEST_USER" >/dev/null 2>&1; }
 
 # Names in the server's starting folder.
 start_folder() {
-  api "$SERVER/api/contents/" | python3 -c "import json, sys; print(*[i['name'] for i in json.load(sys.stdin)['content']])"
+  local listing
+  listing=$(api "$SERVER/api/contents/")
+  grep -oE '"name": ?"[^"]+"' <<<"$listing" | cut -d'"' -f4
 }
 
 starts_with_singleuser() {
@@ -44,7 +51,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
   --image-name jupyterhub-test-environment:local /repo
 
 compose up --detach --build --wait
-api -o /dev/null -X POST "https://$DOMAIN/hub/api/users/$TEST_USER"
+api -X POST "https://$DOMAIN/hub/api/users/$TEST_USER" >/dev/null
 
 start_server environment
 check "repo2docker server runs jupyterhub-singleuser" starts_with_singleuser

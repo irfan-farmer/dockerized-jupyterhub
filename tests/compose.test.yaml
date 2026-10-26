@@ -1,10 +1,11 @@
-# Test-only additions to compose.yaml, used by tests/smoke-test.sh.
+# Test-only additions to compose.yaml, used by the scripts in tests/.
 #
 # Containers that could reach the internet look up outside names through a
 # canary resolver instead of real DNS. It answers every name with an unroutable
 # address, so tests never contact a real server, and it logs each lookup, so the
-# smoke test fails if anything looks up a name outside Docker. Prometheus and
-# Node exporter need no canary: their network has no outside DNS at all.
+# tests fail if anything looks up a name outside Docker. User containers reach
+# it on the users network (see tests/hub_test_config.py). Prometheus and Node
+# exporter need no canary: their network has no outside DNS at all.
 x-canary: &canary
   dns: [198.51.100.53]
   networks:
@@ -19,16 +20,27 @@ services:
     networks:
       canary:
         ipv4_address: 198.51.100.53
+      users:
+        ipv4_address: 198.18.0.53
 
   traefik: *canary
   proxy: *canary
-  jupyterhub: *canary
   maintenance: *canary
   grafana: *canary
+  jupyterhub:
+    <<: *canary
+    command: ["jupyterhub", "-f", "/srv/jupyterhub/tests/hub_test_config.py"]
+    volumes:
+      - ./tests/hub_test_config.py:/srv/jupyterhub/tests/hub_test_config.py:ro
 
+# Both subnets are reserved for documentation and testing, so they can't clash
+# with a real network.
 networks:
-  # 198.51.100.0/24 is reserved for documentation, so it can't clash with a real network.
   canary:
     ipam:
       config:
         - subnet: 198.51.100.0/24
+  users:
+    ipam:
+      config:
+        - subnet: 198.18.0.0/24
