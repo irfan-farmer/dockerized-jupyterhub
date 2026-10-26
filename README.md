@@ -9,9 +9,10 @@ A production-ready JupyterHub for a single Docker host, sized for teams, courses
 - **JupyterHub 6 with DockerSpawner**: one container and one persistent volume per user, with CPU, memory and process limits.
 - **Login through any OpenID Connect provider**, such as Keycloak, Microsoft Entra ID, Google or Authentik. Only the users or groups you list can log in.
 - **Traefik 3** with automatic Let's Encrypt certificates. All traffic is HTTPS.
-- **Prometheus and Grafana** with a ready-made dashboard for active users, server starts, traffic and host resources.
-- **A maintenance page** while the hub is starting or stopped.
-- **Pinned versions**, a smoke test in CI, and weekly dependency updates through Dependabot.
+- **No interruptions during hub restarts**: open notebooks keep working, and hub pages show a maintenance page until the hub is back.
+- **Prometheus and Grafana** with a ready-made dashboard for active users, server starts, traffic and host resources. Grafana is only reachable through an SSH tunnel.
+- **A ready-made hub image** with signed build provenance, so deploying needs no build step.
+- **Pinned versions**, Python packages locked by hash, a smoke test and vulnerability scan in CI, and weekly dependency updates through Dependabot.
 
 ## Is this the right fit?
 
@@ -30,46 +31,67 @@ To size the host, plan for `USER_MEM_LIMIT` × peak concurrent users, plus 2 GB 
 ```mermaid
 flowchart LR
     browser([Browser]) -- HTTPS --> traefik[Traefik]
-    traefik -- DOMAIN --> hub[JupyterHub]
-    traefik -. while the hub is down .-> maintenance[Maintenance page]
-    traefik -- grafana.DOMAIN --> grafana[Grafana]
+    traefik --> proxy[Proxy]
+    traefik -. hub pages, while the hub is down .-> maintenance[Maintenance page]
+    proxy -- /hub --> hub[JupyterHub]
+    proxy -- /user --> users[User containers<br/>one per user, with a volume]
+    hub -- starts --> users
     hub <-- OpenID Connect --> idp[(Identity provider)]
-    hub -- starts and proxies --> users[User containers<br/>one per user, with a volume]
-    prometheus[Prometheus] -- scrapes --> hub
+    admin([Admin]) -- SSH tunnel --> grafana[Grafana]
+    grafana --> prometheus[Prometheus]
+    prometheus -- scrapes --> hub
     prometheus -- scrapes --> traefik
     prometheus -- scrapes --> node[Node exporter]
-    grafana --> prometheus
 ```
 
-Only Traefik publishes ports. Separate Docker networks keep user containers away from the proxy's internals and the monitoring stack.
+Traefik is the only service reachable from the internet. It sends every request to the proxy, which forwards hub pages to JupyterHub and everything else to the user's own container. The proxy runs on its own, so open notebooks keep working while the hub restarts.
+
+Traefik has no access to Docker; only the hub does, to start user containers. Grafana listens on the server's localhost only. Separate Docker networks keep user containers away from Traefik and the monitoring stack.
 
 ## Requirements
 
 - A Linux server with Docker Engine 25 or newer and the Docker Compose plugin 2.24 or newer.
-- DNS records for `DOMAIN` and `grafana.DOMAIN` that point to the server. Ports 80 and 443 must be reachable from the internet, because Let's Encrypt validates over port 80.
+- A DNS record for `DOMAIN` that points to the server. Ports 80 and 443 must be reachable from the internet, because Let's Encrypt validates over port 80.
 - An OpenID Connect client registered with your identity provider, with the redirect URI `https://DOMAIN/hub/oauth_callback`.
+- Disk space for users' files where Docker keeps its data (usually `/var/lib/docker`). Ideally that's a separate disk from the operating system, because a full disk stops the hub for everyone.
 
 ## Quick start
+
+Get the latest release:
 
 ```bash
 git clone https://github.com/irfan-farmer/dockerized-jupyterhub.git
 cd dockerized-jupyterhub
+git checkout "$(git describe --tags --abbrev=0)"
+```
+
+Create `.env` and fill in the required values. Each one is explained in the file:
+
+```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-Fill in the required values in `.env`. Each one is explained in the file. Then start the stack:
+Generate the four random values:
 
 ```bash
-docker compose up -d --build
+for name in METRICS_TOKEN PROXY_AUTH_TOKEN GRAFANA_SECRET_KEY GRAFANA_ADMIN_PASSWORD; do
+  sed -i "s/^$name=\$/$name=$(openssl rand -hex 32)/" .env
+done
 ```
 
-Open `https://DOMAIN` and sign in with an account listed in `ADMIN_USERS`. Grafana is at `https://grafana.DOMAIN`: sign in as `admin` with `GRAFANA_ADMIN_PASSWORD`.
-
-The first time someone starts a server, the notebook image (a few GB) is downloaded, which can take several minutes. To skip that wait, pull the image in advance:
+Start the stack:
 
 ```bash
-docker pull quay.io/jupyter/scipy-notebook:2026-10-19
+docker compose up -d
+```
+
+Open `https://DOMAIN` and sign in with an account listed in `ADMIN_USERS`. When the hub starts, it downloads the notebook image (a few GB) in the background. Until that finishes, the first server start takes longer.
+
+To open Grafana, create an SSH tunnel from your computer, then go to `http://localhost:3000` and sign in as `admin` with `GRAFANA_ADMIN_PASSWORD`:
+
+```bash
+ssh -L 3000:localhost:3000 you@your-server
 ```
 
 ## Configuration
@@ -90,12 +112,13 @@ For changes beyond `.env`, use `jupyterhub/jupyterhub_config.local.py` and `comp
 compose.yaml    all services
 .env.example    settings template
 jupyterhub/     hub image and jupyterhub_config.py
-traefik/        security headers
+traefik/        routes and security headers
 maintenance/    page shown while the hub is down
 prometheus/     scrape configuration
 grafana/        settings, data source and dashboard
 tests/          smoke test, also run by CI
 docs/           configuration, operations, security and privacy
+.github/        CI, release and Dependabot configuration
 ```
 
 ## Contributing and license

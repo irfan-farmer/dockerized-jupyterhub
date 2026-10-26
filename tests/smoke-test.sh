@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Starts the whole stack with the placeholder settings in tests/test.env and
-# checks that every part answers. Removes its containers and volumes afterwards.
-# Needs ports 80 and 443. Do not run on a host that serves a real deployment.
+# checks that every part answers. Containers look up outside names through a
+# canary resolver (see tests/compose.test.yaml), so the test never contacts a
+# real server and fails if any name is looked up outside Docker.
+# Removes its containers and volumes afterwards.
+# Needs ports 80, 443 and 3000. Do not run on a host that serves a real deployment.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # Git Bash on Windows would otherwise rewrite container paths like /etc/...
@@ -16,7 +19,10 @@ if [ -n "$(docker ps --quiet --filter label=com.docker.compose.project=jupyterhu
   exit 1
 fi
 
-compose() { docker compose --project-name jupyterhub-test --env-file tests/test.env "$@"; }
+compose() {
+  docker compose --project-name jupyterhub-test --env-file tests/test.env \
+    -f compose.yaml -f tests/compose.test.yaml "$@"
+}
 
 cleanup() {
   local code=$?
@@ -26,10 +32,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Request https://<host><path> against this machine. -k because tests use
-# Traefik's default certificate instead of requesting one.
-https_status() { curl -sk -o /dev/null -w '%{http_code}' --resolve "$1:443:127.0.0.1" "https://$1$2"; }
-returns() { [ "$(https_status "$1" "$2")" = "$3" ]; }
+# returns <status> <curl arguments>: requests to $DOMAIN go to this machine,
+# and -k accepts Traefik's default certificate, as tests request none.
+returns() {
+  local expected=$1
+  shift
+  [ "$(curl -sk -o /dev/null -w '%{http_code}' --resolve "$DOMAIN:443:127.0.0.1" "$@")" = "$expected" ]
+}
 
 # Responses are captured before grep: piping curl into `grep -q` fails under
 # pipefail when grep exits before curl has finished writing.
@@ -45,17 +54,18 @@ login_page_shows_provider() {
   grep -q 'Sign in with SSO' <<<"$page"
 }
 
-dashboard_provisioned() {
-  local status
-  status=$(curl -sk -o /dev/null -w '%{http_code}' -u "admin:$GRAFANA_ADMIN_PASSWORD" \
-    --resolve "grafana.$DOMAIN:443:127.0.0.1" "https://grafana.$DOMAIN/api/dashboards/uid/jupyterhub")
-  [ "$status" = 200 ]
-}
-
 all_targets_up() {
   local targets
   targets=$(compose exec -T prometheus wget -qO- http://localhost:9090/api/v1/targets)
   [ "$(grep -o '"health":"up"' <<<"$targets" | wc -l)" -eq 4 ]
+}
+
+# Names the canary resolver was asked for, except .invalid names, which never
+# resolve anywhere.
+outside_lookups() {
+  local log
+  log=$(compose logs --no-log-prefix canary-dns)
+  grep -oE '"[A-Z]+ IN [^ ]+' <<<"$log" | awk '{print $3}' | grep -v '\.invalid\.$' | sort -u || true
 }
 
 # Retry a check for up to a minute.
@@ -76,15 +86,34 @@ check() {
 compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
 compose up --detach --build --wait
 
-check "hub answers through Traefik" returns "$DOMAIN" /hub/health 200
+check "hub answers through Traefik" returns 200 "https://$DOMAIN/hub/health"
 check "HTTP redirects to HTTPS" redirects_to_https
 check "login page offers the identity provider" login_page_shows_provider
-check "Grafana answers" returns "grafana.$DOMAIN" /api/health 200
-check "Grafana dashboard is provisioned" dashboard_provisioned
+check "Grafana answers on localhost" returns 200 http://127.0.0.1:3000/api/health
+check "Grafana dashboard is provisioned" returns 200 -u "admin:$GRAFANA_ADMIN_PASSWORD" \
+  http://127.0.0.1:3000/api/dashboards/uid/jupyterhub
 check "Prometheus scrapes all targets" all_targets_up
 
 compose stop jupyterhub
-check "maintenance page while the hub is stopped" returns "$DOMAIN" / 503
+check "maintenance page while the hub is stopped" returns 503 "https://$DOMAIN/"
+check "users' traffic still reaches the proxy" returns 200 "https://$DOMAIN/_chp_healthz"
 
 compose up --detach --wait jupyterhub
-check "hub is back after a restart" returns "$DOMAIN" /hub/health 200
+check "hub is back after a restart" returns 200 "https://$DOMAIN/hub/health"
+
+# Stop the other services that are reached by name, make Traefik and Grafana
+# look for them, then start them again.
+compose stop proxy maintenance prometheus
+curl -sk -o /dev/null --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/" || true
+curl -s -o /dev/null -u "admin:$GRAFANA_ADMIN_PASSWORD" \
+  http://127.0.0.1:3000/api/datasources/uid/prometheus/health || true
+sleep 10
+compose up --detach --wait proxy maintenance prometheus
+check "hub answers after the proxy restarts" returns 200 "https://$DOMAIN/hub/health"
+
+leaked=$(outside_lookups)
+if [ -n "$leaked" ]; then
+  echo "FAIL names looked up outside Docker:" $leaked >&2
+  exit 1
+fi
+echo "ok   no name was looked up outside Docker"

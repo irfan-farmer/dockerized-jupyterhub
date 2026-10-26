@@ -2,7 +2,9 @@
 
 Routine settings live in `.env`, and [.env.example](../.env.example) describes each one. This page covers the settings that need more explanation.
 
-After changing `.env`, apply the change with `docker compose up -d`. This restarts the hub, but users' servers keep running.
+After changing `.env`, apply the change with `docker compose up -d`. This restarts the hub, but users stay connected to their servers.
+
+Containers, including users' servers, don't use the host's DNS search domains. Write full hostnames wherever you refer to a server, such as `keycloak.example.org` rather than `keycloak`.
 
 ## Identity provider
 
@@ -84,9 +86,9 @@ Use `ALLOW_ALL_USERS=true` only if the provider itself limits who can use the cl
 
 `NOTEBOOK_IMAGE` sets the image used for user servers. Any image from [Jupyter Docker Stacks](https://jupyter-docker-stacks.readthedocs.io/) works, as does your own image built on one of them. Pin a dated tag rather than `latest`, so that every user gets the same environment.
 
-A new image is used the next time a user starts their server.
+When the hub starts, it downloads the image in the background, so the first server start doesn't have to wait for it. A new image is used the next time a user starts their server.
 
-To let users choose between images, create `jupyterhub/jupyterhub_config.local.py`:
+To let users choose between images, create `jupyterhub/jupyterhub_config.local.py`. The hub downloads these images at startup too:
 
 ```python
 c.DockerSpawner.allowed_images = {
@@ -97,7 +99,7 @@ c.DockerSpawner.allowed_images = {
 
 ## Resources
 
-- `USER_MEM_LIMIT` (default `2G`) and `USER_CPU_LIMIT` (default `1`) cap each user's container. A user who goes over the memory limit sees their kernel restart.
+- `USER_MEM_LIMIT` (default `2G`) and `USER_CPU_LIMIT` (default `1`) cap each user's container. A user who goes over the memory limit sees their kernel restart. Containers can't use swap on top of the limit, so one user can't slow down the whole host.
 - Each container can run at most 1024 processes and threads, which stops runaway scripts from exhausting the host.
 - `IDLE_TIMEOUT` (default `3600` seconds) stops servers that have had no activity for that long. The user's files stay; they start the server again on their next visit.
 
@@ -108,6 +110,8 @@ Set `SHARED_DATA_DIR` to a directory on the host to mount it read-only at `~/wor
 ## Storage
 
 Each user's `~/work` directory is stored in a Docker volume named `jupyterhub-user-<username>`. Users land in `~/work` when they open JupyterLab. Anything they create outside it, such as packages installed with `pip install --user`, is lost when the server stops.
+
+Docker volumes have no size limit per user, so one user can fill the disk. Keep Docker's data directory on a disk with room to spare, ideally separate from the operating system, and set up the disk alert described in [Monitoring](operations.md#monitoring).
 
 To use a different location, such as a network file system, change `c.DockerSpawner.volumes` in `jupyterhub_config.local.py`.
 
@@ -135,7 +139,7 @@ If you can't use Let's Encrypt, for example because the host isn't reachable fro
          - /etc/ssl/jupyterhub:/certs:ro
    ```
 
-2. Add the files to `traefik/dynamic.yml`:
+2. Add the files at the end of `traefik/dynamic.yml`:
 
    ```yaml
    tls:
@@ -144,4 +148,4 @@ If you can't use Let's Encrypt, for example because the host isn't reachable fro
          keyFile: /certs/privkey.pem
    ```
 
-Traefik uses a matching certificate from this list and only asks Let's Encrypt for names it doesn't cover. Include `grafana.<DOMAIN>` in the certificate too.
+Traefik uses a matching certificate from this list and only asks Let's Encrypt for names it doesn't cover.

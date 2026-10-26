@@ -4,7 +4,7 @@ This page explains how the stack is secured and what personal data it processes.
 
 ## Security
 
-**Network exposure.** Only Traefik publishes ports. Port 80 does nothing except redirect to HTTPS and answer Let's Encrypt's checks. Prometheus, Node exporter and Traefik's metrics endpoint run on an internal Docker network that has no internet access and isn't published. Grafana is published at `grafana.DOMAIN` and requires its own login.
+**Network exposure.** Traefik is the only service reachable from the internet. Port 80 does nothing except redirect to HTTPS and answer Let's Encrypt's checks. Grafana listens on the host's localhost only, so admins reach it through an SSH tunnel, and it still requires its own login. Prometheus, Node exporter and Traefik's metrics endpoint run on an internal Docker network that has no internet access.
 
 **TLS.** Certificates come from Let's Encrypt. Traefik accepts TLS 1.2 or newer and adds HSTS (one year), `X-Content-Type-Options: nosniff` and a strict referrer policy to every response.
 
@@ -14,11 +14,21 @@ This page explains how the stack is secured and what personal data it processes.
 
 **One domain for all users.** By JupyterHub's default design, every user's server is served from the same domain. If users don't trust each other, enable JupyterHub's [subdomain isolation](https://jupyterhub.readthedocs.io/en/stable/explanation/websecurity.html), which needs wildcard DNS and a wildcard certificate.
 
-**Docker socket.** The hub must control Docker to start user containers, and Traefik reads Docker to discover services. Access to the Docker socket is equivalent to root on the host. Keep both images up to date, don't add software to the hub image, and restrict who can log in to the host.
+**Docker socket.** Only the hub has access to Docker, which it needs to start user containers. That access is equivalent to root on the host, so keep the hub updated, don't add software to its image, and restrict who can log in to the host. Traefik reads its routes from `traefik/dynamic.yml` and has no Docker access, so a flaw in the internet-facing service doesn't reach Docker.
 
-**Secrets.** All secrets are in `.env`. Git ignores it; keep its permissions at `600`. The metrics token reaches the hub and Prometheus as a Compose secret file, not as an environment variable.
+**Internal names.** Services reach each other only through names ending in `.invalid`, a domain that no DNS server resolves (RFC 6761), and no container uses the host's DNS search domains. So while a container is down, requests meant for it, which can carry cookies or tokens, fail instead of reaching an outside host with the same name. The one case this can't cover is a DNS server that breaks the standard by answering `.invalid` names. The smoke test checks this on every change: containers use a fake resolver that logs every lookup, and the test fails if any name is looked up outside Docker.
 
-**Updates.** Every image and package is pinned to a version. Dependabot proposes updates weekly and CI tests them. Install new releases promptly; see [Updating](operations.md#updating).
+**Proxy.** The proxy's API, which the hub uses to add routes for users' servers, requires `PROXY_AUTH_TOKEN`. User containers can reach the proxy, so keep that token secret and random.
+
+**Secrets.** All secrets are in `.env`. Git ignores it; keep its permissions at `600`. The metrics token reaches the hub and Prometheus as a Compose secret file. The proxy token is passed as an environment variable, which is how the proxy expects it.
+
+**Supply chain.** Every image and package is pinned to a version, and the hub's Python packages are also pinned by hash. CI scans the hub image for critical vulnerabilities on every change. Each release's hub image is built by GitHub Actions, with a signed build provenance and a software bill of materials. You can check that an image was built from this repository:
+
+```bash
+gh attestation verify oci://ghcr.io/irfan-farmer/dockerized-jupyterhub:<version> --repo irfan-farmer/dockerized-jupyterhub
+```
+
+**Updates.** Dependabot proposes updates weekly, and CI tests them. Install new releases promptly; see [Updating](operations.md#updating).
 
 **The host.** The stack can only be as secure as the server it runs on:
 
@@ -31,7 +41,7 @@ This page explains how the stack is secured and what personal data it processes.
 
 The organization that runs the hub is the controller of the personal data it processes. The stack helps by keeping that data minimal, local and easy to delete.
 
-**No tracking or third-party requests.** The hub's pages, the maintenance page and Grafana load no external fonts, scripts, analytics or avatars. Grafana's Gravatar, news feed, update checks and usage reporting are turned off, as is Traefik's anonymous usage reporting. Inside users' servers, JupyterLab asks each user before it fetches its news feed. Content that users add themselves, such as notebooks that embed web resources, is outside the stack's control.
+**No tracking or third-party requests.** The hub's pages, the maintenance page and Grafana load no external fonts, scripts, analytics or avatars. Grafana's Gravatar, news feed, update checks, usage reporting, plugin downloads and plugin catalog are turned off, as is Traefik's anonymous usage reporting. The smoke test confirms that the services look up no outside names. Inside users' servers, JupyterLab asks each user before it fetches its news feed. Content that users add themselves, such as notebooks that embed web resources, is outside the stack's control.
 
 **Cookies.** JupyterHub and Grafana set only the cookies needed for login and request security. They set no tracking cookies.
 
@@ -49,7 +59,7 @@ The organization that runs the hub is the controller of the personal data it pro
 
 - Your identity provider handles the login.
 - Let's Encrypt issues the certificates.
-- Images are downloaded from Docker Hub and quay.io. These downloads contain no user data.
+- Images are downloaded from Docker Hub, quay.io and GitHub's container registry. These downloads contain no user data.
 
 **Requests from data subjects.** [Operations](operations.md#managing-users) shows how to export a user's files and how to delete a user and their data. Log entries disappear as logs rotate. Copies in backups last as long as your backup retention.
 

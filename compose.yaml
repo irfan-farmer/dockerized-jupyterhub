@@ -1,8 +1,14 @@
 # JupyterHub on a single Docker host. Settings live in .env (see .env.example).
+#
+# Services reach each other only through aliases ending in .invalid, a domain
+# that no DNS server resolves (RFC 6761), and containers don't use the host's
+# DNS search domains. While a container is down, a request meant for it fails
+# instead of reaching an outside host that happens to share its name.
 name: jupyterhub
 
 x-defaults: &defaults
   restart: unless-stopped
+  dns_search: .
   security_opt:
     - no-new-privileges:true
   logging:
@@ -16,9 +22,6 @@ services:
     <<: *defaults
     image: traefik:v3.7.16
     command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=jupyterhub-proxy
       - --providers.file.filename=/etc/traefik/dynamic.yml
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
@@ -33,22 +36,53 @@ services:
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       - --global.checknewversion=false
       - --global.sendanonymoususage=false
+    environment:
+      # Used by the routes in traefik/dynamic.yml.
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - letsencrypt:/letsencrypt
     networks:
-      - proxy
-      - monitoring
+      edge:
+      monitoring:
+        aliases: [traefik.invalid]
+
+  # Routes requests to the hub and to users' servers. It runs apart from the
+  # hub, so users stay connected while the hub restarts.
+  proxy:
+    <<: *defaults
+    image: jupyterhub/configurable-http-proxy:5.3.0
+    command:
+      - --default-target=http://hub.invalid:8081
+      - --error-target=http://hub.invalid:8081/hub/error
+      # Traefik already sets the X-Forwarded headers.
+      - --no-x-forward
+    environment:
+      CONFIGPROXY_AUTH_TOKEN: ${PROXY_AUTH_TOKEN:?Set PROXY_AUTH_TOKEN in .env}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/_chp_healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 2s
+    networks:
+      edge:
+        aliases: [proxy.invalid]
+      users:
+        aliases: [proxy.invalid]
 
   jupyterhub:
     <<: *defaults
+    image: ghcr.io/irfan-farmer/dockerized-jupyterhub:2.0.0
+    # Used when the image isn't published yet, or with --build.
     build: ./jupyterhub
     environment:
       - DOMAIN
+      - PROXY_AUTH_TOKEN
       - OAUTH_CLIENT_ID
       - OAUTH_CLIENT_SECRET
       - OAUTH_AUTHORIZE_URL
@@ -75,24 +109,18 @@ services:
       - hub_data:/srv/jupyterhub/data
     secrets:
       - metrics_token
-    # Traefik routes to the hub only while it is healthy; otherwise the
-    # maintenance page answers.
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/hub/health', timeout=4)"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/hub/health', timeout=4)"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 60s
       start_interval: 2s
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.jupyterhub.rule=Host(`${DOMAIN:?Set DOMAIN in .env}`)
-      - traefik.http.routers.jupyterhub.entrypoints=websecure
-      - traefik.http.services.jupyterhub.loadbalancer.server.port=8000
     networks:
-      - proxy
-      - users
-      - monitoring
+      users:
+        aliases: [hub.invalid]
+      monitoring:
+        aliases: [hub.invalid]
 
   maintenance:
     <<: *defaults
@@ -100,14 +128,9 @@ services:
     volumes:
       - ./maintenance/index.html:/usr/share/nginx/html/index.html:ro
       - ./maintenance/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.maintenance.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.maintenance.entrypoints=websecure
-      - traefik.http.routers.maintenance.priority=1
-      - traefik.http.services.maintenance.loadbalancer.server.port=8080
     networks:
-      - proxy
+      edge:
+        aliases: [maintenance.invalid]
 
   prometheus:
     <<: *defaults
@@ -122,7 +145,8 @@ services:
     secrets:
       - metrics_token
     networks:
-      - monitoring
+      monitoring:
+        aliases: [prometheus.invalid]
 
   node-exporter:
     <<: *defaults
@@ -133,26 +157,26 @@ services:
     volumes:
       - /:/host:ro
     networks:
-      - monitoring
+      monitoring:
+        aliases: [node-exporter.invalid]
 
   grafana:
     <<: *defaults
     image: grafana/grafana:13.2.4
     environment:
-      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}/
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
       GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY:?Set GRAFANA_SECRET_KEY in .env}
+    # Only reachable from the host itself. Open it through an SSH tunnel
+    # (see docs/operations.md#monitoring).
+    ports:
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)
-      - traefik.http.routers.grafana.entrypoints=websecure
-      - traefik.http.services.grafana.loadbalancer.server.port=3000
     networks:
-      - proxy
+      # default: publishes the local port and lets alerts reach mail or chat.
+      - default
       - monitoring
 
 secrets:
@@ -161,15 +185,13 @@ secrets:
     environment: METRICS_TOKEN
 
 networks:
-  # Traefik and the services it publishes.
-  proxy:
-    name: jupyterhub-proxy
-  # The hub and user containers. Name referenced in jupyterhub_config.py.
+  # Traefik, the proxy and the maintenance page.
+  edge:
+  # The hub, the proxy and user containers. Name referenced in jupyterhub_config.py.
   users:
     name: jupyterhub-users
   # Metrics only; no internet access.
   monitoring:
-    name: jupyterhub-monitoring
     internal: true
 
 volumes:
