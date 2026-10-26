@@ -4,7 +4,7 @@ Notable changes to this project are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-10-22
+## [2.0.0] - 2026-10-26
 
 Faster to deploy, harder to attack, and users stay connected while the hub restarts.
 
