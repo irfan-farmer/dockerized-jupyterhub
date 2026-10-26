@@ -4,6 +4,8 @@ Notable changes to this project are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-26
+
 ### Added
 
 - Support for environment images built with repo2docker. The hub starts them with `jupyterhub-singleuser` and opens the home folder, where the repository's files sit next to `work/`.
