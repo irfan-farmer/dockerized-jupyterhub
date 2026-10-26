@@ -4,6 +4,8 @@ Notable changes to this project are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-26
+
 ### Added
 
 - Support for environment images built with repo2docker. The hub starts them with `jupyterhub-singleuser` and opens the home folder, where the repository's files sit next to `work/`.
@@ -88,6 +90,7 @@ The first general-purpose release. Earlier commits were an unversioned deploymen
 - Site-specific branding, login page, logos, data mounts and images.
 - Requests to third parties from the browser, such as Google Fonts.
 
-[Unreleased]: https://github.com/irfan-farmer/dockerized-jupyterhub/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/irfan-farmer/dockerized-jupyterhub/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/irfan-farmer/dockerized-jupyterhub/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/irfan-farmer/dockerized-jupyterhub/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/irfan-farmer/dockerized-jupyterhub/releases/tag/v1.0.0

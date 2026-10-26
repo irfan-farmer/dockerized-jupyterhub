@@ -77,7 +77,7 @@ services:
 
   jupyterhub:
     <<: *defaults
-    image: ghcr.io/irfan-farmer/dockerized-jupyterhub:2.0.0
+    image: ghcr.io/irfan-farmer/dockerized-jupyterhub:2.1.0
     # Used when the image isn't published yet, or with --build.
     build: ./jupyterhub
     environment:
