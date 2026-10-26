@@ -8,6 +8,7 @@ A production-ready JupyterHub for a single Docker host, sized for teams, courses
 
 - **JupyterHub 6 with DockerSpawner**: one container and one persistent volume per user, with CPU, memory and process limits.
 - **Login through any OpenID Connect provider**, such as Keycloak, Microsoft Entra ID, Google or Authentik. Only the users or groups you list can log in.
+- **Environments per course or project**, built from a repository with repo2docker in CI. A template is in [examples/environment](examples/environment).
 - **Traefik 3** with automatic Let's Encrypt certificates. All traffic is HTTPS.
 - **No interruptions during hub restarts**: open notebooks keep working, and hub pages show a maintenance page until the hub is back.
 - **Prometheus and Grafana** with a ready-made dashboard for active users, server starts, traffic and host resources. Grafana is only reachable through an SSH tunnel.
@@ -116,7 +117,8 @@ traefik/        routes and security headers
 maintenance/    page shown while the hub is down
 prometheus/     scrape configuration
 grafana/        settings, data source and dashboard
-tests/          smoke test, also run by CI
+tests/          smoke and repo2docker tests, also run by CI
+examples/       template for a repo2docker environment
 docs/           configuration, operations, security and privacy
 .github/        CI, release and Dependabot configuration
 ```

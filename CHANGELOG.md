@@ -4,6 +4,12 @@ Notable changes to this project are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Support for environment images built with repo2docker. The hub starts them with `jupyterhub-singleuser` and opens the home folder, where the repository's files sit next to `work/`.
+- A template environment in `examples/environment`, with a GitHub Actions workflow that builds and publishes the image.
+- A CI test that starts real user servers from a repo2docker image and a Jupyter Docker Stacks image.
+
 ## [2.0.0] - 2026-10-26
 
 Faster to deploy, harder to attack, and users stay connected while the hub restarts.

@@ -14,7 +14,9 @@ Bug reports, fixes and documentation improvements are welcome. Keep pull request
 
    The test never contacts real servers: containers look up outside names through a fake resolver.
 
-4. Open a pull request. CI runs the same test.
+   If you changed how user servers start, also run `tests/repo2docker-test.sh`. It builds the template environment, which takes several minutes, and starts real user servers.
+
+4. Open a pull request. CI runs both tests.
 
 When one service connects to another, use the other service's `.invalid` alias from `compose.yaml`, never its plain name. The smoke test fails if a name is looked up outside Docker.
 
