@@ -97,6 +97,19 @@ c.DockerSpawner.allowed_images = {
 }
 ```
 
+## Environments from repo2docker
+
+A course or project can keep its own environment in a repository: an `environment.yml` (or another file [repo2docker](https://repo2docker.readthedocs.io/en/latest/configuration/) reads) plus any notebooks and data. CI builds it into an image with repo2docker and publishes it, and you offer that image through `allowed_images`, as above. Nothing is built on the hub's server.
+
+[examples/environment](../examples/environment) is a template to copy, with a GitHub Actions workflow that builds and publishes the image.
+
+The hub recognizes images built by repo2docker and adjusts for them:
+
+- It starts `jupyterhub-singleuser` directly, because these images lack the start scripts of Jupyter Docker Stacks images.
+- It opens the home folder, where the repository's files sit next to the persistent `work/` folder. Files outside `work/` are reset each time the server starts.
+
+The image must contain `jupyterhub-singleuser` with the hub's major version (6), which needs Python 3.11 or newer. The template's `environment.yml` pins both, because repo2docker would otherwise use Python 3.10.
+
 ## Resources
 
 - `USER_MEM_LIMIT` (default `2G`) and `USER_CPU_LIMIT` (default `1`) cap each user's container. A user who goes over the memory limit sees their kernel restart. Containers can't use swap on top of the limit, so one user can't slow down the whole host.

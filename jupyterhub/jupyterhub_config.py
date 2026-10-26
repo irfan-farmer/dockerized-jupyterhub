@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 import docker
+from dockerspawner import DockerSpawner
 
 c = get_config()  # noqa: F821 - provided by JupyterHub
 
@@ -50,6 +51,30 @@ def pull_images(images):
             log.info("Notebook image %s is ready", image)
         except docker.errors.DockerException as e:
             log.warning("Could not pull notebook image %s: %s", image, e)
+
+
+class EnvironmentSpawner(DockerSpawner):
+    """DockerSpawner that also runs images built by repo2docker.
+
+    Those images lack the start scripts of Jupyter Docker Stacks images and keep
+    their repository's files in the home directory. For them, start
+    jupyterhub-singleuser directly and open the home directory, where users see
+    the repository's files next to their persistent work/ folder.
+    """
+
+    async def start(self):
+        if not hasattr(self, "_configured"):
+            self._configured = (self.cmd, self.notebook_dir)
+        # Resolve the chosen image the same way DockerSpawner.start() does.
+        option = self.user_options.get("image")
+        image = await self.check_allowed(option) if option else self.image
+        await self.pull_image(image)
+        labels = (await self.docker("inspect_image", image))["Config"].get("Labels") or {}
+        if "repo2docker.version" in labels:
+            self.cmd, self.notebook_dir = ["jupyterhub-singleuser"], "/home/jovyan"
+        else:
+            self.cmd, self.notebook_dir = self._configured
+        return await super().start()
 
 
 domain = required_env("DOMAIN")
@@ -97,7 +122,7 @@ if env("ALLOWED_GROUPS") or env("ADMIN_GROUPS"):
     c.GenericOAuthenticator.admin_groups = env_set("ADMIN_GROUPS")
 
 # One container per user, with a persistent volume mounted as ~/work.
-c.JupyterHub.spawner_class = "dockerspawner.DockerSpawner"
+c.JupyterHub.spawner_class = EnvironmentSpawner
 c.DockerSpawner.image = env("NOTEBOOK_IMAGE", "quay.io/jupyter/scipy-notebook:2026-10-19")
 c.DockerSpawner.network_name = "jupyterhub-users"
 c.DockerSpawner.remove = True
