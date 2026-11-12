@@ -20,7 +20,7 @@ x-defaults: &defaults
 services:
   traefik:
     <<: *defaults
-    image: traefik:v3.7.16
+    image: traefik:v3.7.17
     command:
       - --providers.file.filename=/etc/traefik/dynamic.yml
       - --entrypoints.web.address=:80
