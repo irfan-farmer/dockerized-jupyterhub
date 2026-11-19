@@ -1,4 +1,4 @@
-FROM jupyterhub/jupyterhub:6.1.1
+FROM jupyterhub/jupyterhub:6.2.0-0
 
 # Packages the base image lacks, each pinned by hash (see requirements.txt).
 COPY requirements.txt /tmp/requirements.txt
